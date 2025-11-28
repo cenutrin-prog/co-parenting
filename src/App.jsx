@@ -15,8 +15,9 @@ const CoParentingApp = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [schedule, setSchedule] = useState({});
   const [notes, setNotes] = useState({});
-  const [currentView, setCurrentView] = useState('week');
+  const [currentView, setCurrentView] = useState('week'); // Abrimos directamente en semana
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [modalObservation, setModalObservation] = useState(null); // recuadro grande
 
   const periods = ['Mañana', 'Tarde', 'Noche'];
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -27,7 +28,7 @@ const CoParentingApp = () => {
     setCurrentUser(user);
     setShowNameEntry(false);
     setStep('main');
-    setCurrentView('week'); // niños entran directamente en vista semanal
+    setCurrentView('week'); // abrimos directamente vista semanal
   };
 
   const getWeekDates = (date) => {
@@ -52,42 +53,43 @@ const CoParentingApp = () => {
 
     const firstWeekDay = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
     for (let i = 0; i < firstWeekDay; i++) dates.push(null);
-
     for (let i = 1; i <= lastDay.getDate(); i++) dates.push(new Date(year, month, i));
     return dates;
   };
 
   const formatDate = (date) => date.toISOString().split('T')[0];
-
   const getScheduleKey = (date, child, period) => `${formatDate(date)}_${child}_${period}`;
 
+  // ------------------ DAILY VIEW ------------------
   const DailyView = () => (
     <div className="p-2">
       {periods.map(period => (
         <div key={period} className="mb-3 border rounded p-2">
           <div className="text-xs font-bold mb-2 uppercase">{period}</div>
           <div className="grid grid-cols-2 gap-2">
-            {['child1', 'child2'].map(child => (
+            {['child1','child2'].map(child => (
               <div key={child} className="border rounded p-2">
                 <div className="text-xs font-medium mb-1">{children[child]}</div>
                 <select
                   value={schedule[getScheduleKey(currentDate, child, period)] || ''}
                   onChange={(e) => setSchedule({...schedule, [getScheduleKey(currentDate, child, period)]: e.target.value})}
                   className="w-full text-xs p-1 border rounded"
-                  style={{ backgroundColor: schedule[getScheduleKey(currentDate, child, period)] ? colors[schedule[getScheduleKey(currentDate, child, period)]] + '20' : 'white' }}
-                  disabled={currentUser==='child1'||currentUser==='child2'}
+                  style={{ backgroundColor: schedule[getScheduleKey(currentDate, child, period)] ? colors[schedule[getScheduleKey(currentDate, child, period)]]+'20' : 'white' }}
+                  disabled={currentUser==='child1' || currentUser==='child2'}
                 >
                   <option value="">Seleccionar</option>
-                  <option value="parent1">{parents.parent1}</option>
-                  <option value="parent2">{parents.parent2}</option>
+                  {Object.keys(parents).map(p => <option key={p} value={p}>{parents[p]}</option>)}
                 </select>
                 <textarea
                   placeholder="Observaciones"
                   value={notes[getScheduleKey(currentDate, child, period)] || ''}
-                  onChange={(e) => setNotes(prev => ({ ...prev, [getScheduleKey(currentDate, child, period)]: e.target.value }))}
+                  onChange={(e) => setNotes(prev => ({
+                    ...prev,
+                    [getScheduleKey(currentDate, child, period)]: e.target.value
+                  }))}
                   className="w-full text-xs p-1 border rounded mt-1"
-                  style={{ minHeight: '50px' }}
-                  disabled={currentUser==='child1'||currentUser==='child2'}
+                  style={{ minHeight:'50px' }}
+                  disabled={currentUser==='child1' || currentUser==='child2'}
                 />
               </div>
             ))}
@@ -97,46 +99,38 @@ const CoParentingApp = () => {
     </div>
   );
 
+  // ------------------ WEEK VIEW ------------------
   const WeekView = () => {
     const weekDates = getWeekDates(currentDate);
+    const firstMonth = weekDates[0].toLocaleDateString('es-ES',{month:'long'});
+    const lastMonth = weekDates[6].toLocaleDateString('es-ES',{month:'long'});
+    const monthLabel = firstMonth===lastMonth?firstMonth:`${firstMonth} / ${lastMonth}`;
+
     return (
       <div className="p-2 overflow-x-auto">
         <div className="flex items-center justify-between mb-2">
-          <button onClick={() => setCurrentDate(d => { const newD = new Date(d); newD.setDate(d.getDate() - 7); return newD; })} className="p-1"><ChevronLeft size={18} /></button>
-          <div className="text-xs font-medium">Semana</div>
-          <button onClick={() => setCurrentDate(d => { const newD = new Date(d); newD.setDate(d.getDate() + 7); return newD; })} className="p-1"><ChevronRight size={18} /></button>
+          <button onClick={()=>{ const d = new Date(currentDate); d.setDate(currentDate.getDate()-7); setCurrentDate(d);}} className="p-1"><ChevronLeft size={18}/></button>
+          <div className="text-xs font-medium">{monthLabel}</div>
+          <button onClick={()=>{ const d = new Date(currentDate); d.setDate(currentDate.getDate()+7); setCurrentDate(d);}} className="p-1"><ChevronRight size={18}/></button>
         </div>
 
         <div className="grid grid-cols-7 gap-1 text-xs">
-          {weekDates.map((date, i) => (
+          {weekDates.map((date,i)=>(
             <div key={i} className="border rounded p-1">
               <div className="font-bold text-center mb-1">{daysOfWeek[i]} {date.getDate()}</div>
-              {periods.map(period => (
-                <div key={period} className="mb-1">
-                  {currentUser==='child1'||currentUser==='child2' ? (
-                    // vista niños: sólo franja de su hijo con Papá/Mamá y observaciones
-                    <div className="mb-1">
-                      <div className="flex-1 h-6 rounded relative text-[10px] flex justify-center items-center font-medium"
-                        style={{
-                          backgroundColor: schedule[getScheduleKey(date, currentUser, period)] ? colors[schedule[getScheduleKey(date, currentUser, period)]] : '#f3f4f6'
-                        }}>
-                        {schedule[getScheduleKey(date, currentUser, period)]==='parent1'?'Papá':'Mamá'}
-                      </div>
-                      <div className="text-[10px] mt-1 px-1">{notes[getScheduleKey(date, currentUser, period)]||''}</div>
+              {periods.map(period=>{
+                const child = currentUser==='child1'? 'child1' : currentUser==='child2'? 'child2' : null;
+                return child && (
+                  <div key={period} className="mb-1">
+                    <div className="text-[10px] px-1 rounded text-center" style={{backgroundColor:schedule[getScheduleKey(date,child,period)] ? colors[schedule[getScheduleKey(date,child,period)]] : '#f3f4f6'}}>
+                      {schedule[getScheduleKey(date,child,period)] ? (schedule[getScheduleKey(date,child,period)]==='parent1'?'Papá':'Mamá') : '-'}
                     </div>
-                  ) : (
-                    // vista padres: se ve todo
-                    ['child1','child2'].map(child => {
-                      const parent = schedule[getScheduleKey(date, child, period)];
-                      return (
-                        <div key={child} className="text-[10px] px-1 rounded" style={{ backgroundColor: parent ? colors[parent]+'40' : '#f3f4f6', textAlign: 'center' }}>
-                          {parent ? (parent==='parent1'?parents.parent1:parents.parent2) : '-'}
-                        </div>
-                      )
-                    })
-                  )}
-                </div>
-              ))}
+                    <div className="text-[8px] px-1 rounded text-center" style={{backgroundColor:'#e5e7eb'}}>
+                      {notes[getScheduleKey(date,child,period)] || ''}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           ))}
         </div>
@@ -144,59 +138,63 @@ const CoParentingApp = () => {
     );
   };
 
+  // ------------------ MONTH VIEW ------------------
   const MonthView = () => {
     const monthDates = getMonthDates(currentDate);
     return (
       <div className="p-2">
         <div className="flex items-center justify-between mb-2">
-          <button onClick={() => setCurrentDate(d=>{const newD=new Date(d);newD.setMonth(d.getMonth()-1);return newD;})} className="p-1"><ChevronLeft size={18}/></button>
-          <div className="text-sm font-medium">{currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</div>
-          <button onClick={() => setCurrentDate(d=>{const newD=new Date(d);newD.setMonth(d.getMonth()+1);return newD;})} className="p-1"><ChevronRight size={18}/></button>
+          <button onClick={()=>{ const d = new Date(currentDate); d.setMonth(currentDate.getMonth()-1); setCurrentDate(d); }} className="p-1"><ChevronLeft size={18}/></button>
+          <div className="text-sm font-medium">{currentDate.toLocaleDateString('es-ES',{month:'long',year:'numeric'})}</div>
+          <button onClick={()=>{ const d = new Date(currentDate); d.setMonth(currentDate.getMonth()+1); setCurrentDate(d); }} className="p-1"><ChevronRight size={18}/></button>
         </div>
 
         <div className="grid grid-cols-7 gap-1">
           {daysOfWeek.map(day => <div key={day} className="text-xs font-bold text-center">{day}</div>)}
           {monthDates.map((date,i)=>(
             <div key={i} className="border rounded p-1 min-h-16">
-              {date && (
-                <>
-                  <div className="text-xs font-bold">{date.getDate()}</div>
-                  {periods.map(period=>(
-                    <div key={period} className="flex gap-0.5">
-                      {['child1','child2'].map(child=>{
-                        const parent = schedule[getScheduleKey(date,child,period)];
-                        return (
-                          <div key={child} className="flex-1 h-6 rounded relative" style={{backgroundColor: parent ? colors[parent] : '#e5e7eb'}}>
-                            {parent &&
-                              <span className="absolute inset-0 text-[8px] flex justify-center items-center font-medium">
-                                {parent==='parent1'?'Papá':'Mamá'}
-                              </span>
-                            }
-                          </div>
-                        )
-                      })}
+              {date && periods.map(period=>{
+                const child = currentUser==='child1'? 'child1': currentUser==='child2'? 'child2':null;
+                return child && (
+                  <div key={period} className="mb-1">
+                    <div className="text-[10px] px-1 rounded text-center" style={{backgroundColor:schedule[getScheduleKey(date,child,period)]? colors[schedule[getScheduleKey(date,child,period)]]:'#f3f4f6'}}>
+                      {schedule[getScheduleKey(date,child,period)]? (schedule[getScheduleKey(date,child,period)]==='parent1'?'Papá':'Mamá') : '-'}
                     </div>
-                  ))}
-                </>
-              )}
+                    <div className="text-[8px] px-1 rounded text-center" style={{backgroundColor:'#e5e7eb'}}>
+                      {notes[getScheduleKey(date,child,period)] || ''}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           ))}
         </div>
+
+        {modalObservation && (
+          <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50" onClick={()=>setModalObservation(null)}>
+            <div className="bg-white p-4 rounded max-w-md w-full" onClick={e=>e.stopPropagation()}>
+              <h3 className="font-bold mb-2">Observaciones</h3>
+              <p className="text-sm">{modalObservation}</p>
+              <button onClick={()=>setModalObservation(null)} className="mt-2 px-3 py-1 bg-blue-600 text-white rounded">Cerrar</button>
+            </div>
+          </div>
+        )}
       </div>
     )
   };
 
+  // ------------------ RENDER ------------------
   if(step==='setup'){
     return <SetupScreen saveAndContinue={saveAndContinue} parents={parents} setParents={setParents} children={children} setChildren={setChildren} showNameEntry={showNameEntry} setShowNameEntry={setShowNameEntry} />;
   }
 
-  const topBarColor = currentUser ? colors[currentUser] : '#3b82f6';
-  const profileBorder = currentUser ? borderColors[currentUser] : '#ffffff';
-  const displayName = currentUser==='parent1'?parents.parent1:currentUser==='parent2'?parents.parent2:currentUser==='child1'?children.child1:children.child2;
+  const topBarColor = currentUser ? colors[currentUser]:'#3b82f6';
+  const profileBorder = currentUser ? borderColors[currentUser]:'#ffffff';
+  const displayName = currentUser==='child1'? children.child1: currentUser==='child2'? children.child2: currentUser==='parent1'? parents.parent1: currentUser==='parent2'?parents.parent2:currentUser;
 
   return (
     <div className="max-w-md mx-auto h-screen flex flex-col bg-white">
-      <div className="flex items-center justify-between p-2" style={{ backgroundColor: topBarColor }}>
+      <div className="flex items-center justify-between p-2" style={{backgroundColor:topBarColor}}>
         <div className="flex items-center gap-2 text-white">
           <Users size={20}/>
           <span className="font-bold text-sm">CoParenting</span>
@@ -208,8 +206,7 @@ const CoParentingApp = () => {
       </div>
 
       <div className="flex gap-1 p-2 border-b overflow-x-auto">
-        {!(currentUser==='child1'||currentUser==='child2') &&
-          <button onClick={()=>setCurrentView('daily')} className={`px-3 py-1 text-xs rounded flex items-center gap-1 whitespace-nowrap ${currentView==='daily'?'bg-blue-600 text-white':'bg-gray-100'}`}><Calendar size={14}/>Día</button>}
+        <button onClick={()=>setCurrentView('daily')} className={`px-3 py-1 text-xs rounded flex items-center gap-1 whitespace-nowrap ${currentView==='daily'?'bg-blue-600 text-white':'bg-gray-100'}`}><Calendar size={14}/>Día</button>
         <button onClick={()=>setCurrentView('week')} className={`px-3 py-1 text-xs rounded whitespace-nowrap ${currentView==='week'?'bg-blue-600 text-white':'bg-gray-100'}`}>Semana</button>
         <button onClick={()=>setCurrentView('month')} className={`px-3 py-1 text-xs rounded whitespace-nowrap ${currentView==='month'?'bg-blue-600 text-white':'bg-gray-100'}`}>Mes</button>
         {!(currentUser==='child1'||currentUser==='child2') &&
