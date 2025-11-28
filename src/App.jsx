@@ -18,7 +18,7 @@ const CoParentingApp = () => {
   const [currentView, setCurrentView] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  const periods = ['mañana', 'tarde', 'noche'];
+  const periods = ['Mañana', 'Tarde', 'Noche'];
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
   const saveAndContinue = (user) => {
@@ -27,6 +27,7 @@ const CoParentingApp = () => {
     setCurrentUser(user);
     setShowNameEntry(false);
     setStep('main');
+    setCurrentView('week'); // niños entran directamente en vista semanal
   };
 
   const getWeekDates = (date) => {
@@ -112,15 +113,28 @@ const CoParentingApp = () => {
               <div className="font-bold text-center mb-1">{daysOfWeek[i]} {date.getDate()}</div>
               {periods.map(period => (
                 <div key={period} className="mb-1">
-                  <div className="text-[10px] font-medium">{period[0].toUpperCase()}</div>
-                  {['child1','child2'].map(child => {
-                    const parent = schedule[getScheduleKey(date, child, period)];
-                    return (
-                      <div key={child} className="text-[10px] px-1 rounded" style={{ backgroundColor: parent ? colors[parent]+'40' : '#f3f4f6', textAlign: 'center' }}>
-                        {parent ? (parent==='parent1'?parents.parent1:parents.parent2) : '-'}
+                  {currentUser==='child1'||currentUser==='child2' ? (
+                    // vista niños: sólo franja de su hijo con Papá/Mamá y observaciones
+                    <div className="mb-1">
+                      <div className="flex-1 h-6 rounded relative text-[10px] flex justify-center items-center font-medium"
+                        style={{
+                          backgroundColor: schedule[getScheduleKey(date, currentUser, period)] ? colors[schedule[getScheduleKey(date, currentUser, period)]] : '#f3f4f6'
+                        }}>
+                        {schedule[getScheduleKey(date, currentUser, period)]==='parent1'?'Papá':'Mamá'}
                       </div>
-                    )
-                  })}
+                      <div className="text-[10px] mt-1 px-1">{notes[getScheduleKey(date, currentUser, period)]||''}</div>
+                    </div>
+                  ) : (
+                    // vista padres: se ve todo
+                    ['child1','child2'].map(child => {
+                      const parent = schedule[getScheduleKey(date, child, period)];
+                      return (
+                        <div key={child} className="text-[10px] px-1 rounded" style={{ backgroundColor: parent ? colors[parent]+'40' : '#f3f4f6', textAlign: 'center' }}>
+                          {parent ? (parent==='parent1'?parents.parent1:parents.parent2) : '-'}
+                        </div>
+                      )
+                    })
+                  )}
                 </div>
               ))}
             </div>
@@ -155,7 +169,7 @@ const CoParentingApp = () => {
                           <div key={child} className="flex-1 h-6 rounded relative" style={{backgroundColor: parent ? colors[parent] : '#e5e7eb'}}>
                             {parent &&
                               <span className="absolute inset-0 text-[8px] flex justify-center items-center font-medium">
-                                {parent==='parent1'?parents.parent1:parents.parent2}
+                                {parent==='parent1'?'Papá':'Mamá'}
                               </span>
                             }
                           </div>
@@ -178,7 +192,7 @@ const CoParentingApp = () => {
 
   const topBarColor = currentUser ? colors[currentUser] : '#3b82f6';
   const profileBorder = currentUser ? borderColors[currentUser] : '#ffffff';
-  const displayName = currentUser==='parent1'?parents.parent1:currentUser==='parent2'?parents.parent2:currentUser;
+  const displayName = currentUser==='parent1'?parents.parent1:currentUser==='parent2'?parents.parent2:currentUser==='child1'?children.child1:children.child2;
 
   return (
     <div className="max-w-md mx-auto h-screen flex flex-col bg-white">
@@ -203,9 +217,9 @@ const CoParentingApp = () => {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {currentView==='daily' && DailyView()}
-        {currentView==='week' && WeekView()}
-        {currentView==='month' && MonthView()}
+        {currentView==='daily' && <DailyView />}
+        {currentView==='week' && <WeekView />}
+        {currentView==='month' && <MonthView />}
       </div>
     </div>
   )
