@@ -1,154 +1,214 @@
-// Voy a restaurar una versión estable y funcional basada en lo que tenías antes
-// pero corrigiendo SOLO lo que has pedido: nombres en barra superior, hijos sin vista de día,
-// semana L-D, menú correcto, y sin romper nada.
+import React, { useState } from 'react';
+import { Calendar, Users, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
+import SetupScreen from './SetupScreen';
 
-import { useState } from "react";
+const CoParentingApp = () => {
+  const savedParents = typeof window !== 'undefined' ? localStorage.getItem('coparenting_parents') : null;
+  const savedChildren = typeof window !== 'undefined' ? localStorage.getItem('coparenting_children') : null;
 
-export default function App() {
-  const [data, setData] = useState({
-    fatherName: "",
-    motherName: "",
-    child1Name: "",
-    child2Name: "",
-    profile: null,
-  });
+  const [step, setStep] = useState('setup');
+  const [showNameEntry, setShowNameEntry] = useState(!savedParents || !savedChildren);
+  const [parents, setParents] = useState(savedParents ? JSON.parse(savedParents) : { parent1: '', parent2: '', other: '' });
+  const [children, setChildren] = useState(savedChildren ? JSON.parse(savedChildren) : { child1: '', child2: '' });
+  const [colors] = useState({ parent1: '#86efac', parent2: '#fde047', child1: '#60a5fa', child2: '#f9a8d4', other: '#10B981' });
+  const [borderColors] = useState({ parent1: '#065f46', parent2: '#713f12', child1: '#1e3a8a', child2: '#831843', other: '#065f46' });
+  const [currentUser, setCurrentUser] = useState(null);
+  const [schedule, setSchedule] = useState({});
+  const [notes, setNotes] = useState({});
+  const [currentView, setCurrentView] = useState('week');
+  const [currentDate, setCurrentDate] = useState(new Date());
 
-  const [screen, setScreen] = useState("setup"); // setup | menu | week | day
-  const [selectedDay, setSelectedDay] = useState(null);
+  const periods = ['mañana', 'tarde', 'noche'];
+  const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
-  const week = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
-
-  // ------------------ BARRA SUPERIOR ------------------
-  const renderHeader = () => {
-    let name = "";
-    if (data.profile === "father") name = data.fatherName;
-    if (data.profile === "mother") name = data.motherName;
-    if (data.profile === "child1") name = data.child1Name;
-    if (data.profile === "child2") name = data.child2Name;
-
-    return (
-      <div style={{
-        background: "#333",
-        padding: "10px",
-        display: "flex",
-        justifyContent: "space-between",
-        color: "white",
-        alignItems: "center",
-      }}>
-        <div style={{ fontSize: 20, fontWeight: "bold" }}>CoParenting</div>
-        <div style={{
-          border: "2px solid white",
-          padding: "4px 8px",
-          borderRadius: 10,
-        }}>{name}</div>
-      </div>
-    );
+  const saveAndContinue = (user) => {
+    localStorage.setItem('coparenting_parents', JSON.stringify(parents));
+    localStorage.setItem('coparenting_children', JSON.stringify(children));
+    setCurrentUser(user);
+    setShowNameEntry(false);
+    setStep('main');
   };
 
-  // ------------------- SETUP -------------------
-  const renderSetup = () => (
-    <div style={{ padding: 20 }}>
-      <h2>Configurar nombres</h2>
+  const getWeekDates = (date) => {
+    const curr = new Date(date);
+    const day = curr.getDay();
+    const diff = (day === 0 ? -6 : 1 - day); // lunes como primer día
+    const monday = new Date(curr);
+    monday.setDate(curr.getDate() + diff);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      return d;
+    });
+  };
 
-      <input
-        placeholder="Nombre del padre"
-        value={data.fatherName}
-        onChange={(e) => setData({ ...data, fatherName: e.target.value })}
-        style={{ width: "100%", marginBottom: 10 }}
-      />
-      <input
-        placeholder="Nombre de la madre"
-        value={data.motherName}
-        onChange={(e) => setData({ ...data, motherName: e.target.value })}
-        style={{ width: "100%", marginBottom: 10 }}
-      />
-      <input
-        placeholder="Nombre hija 1"
-        value={data.child1Name}
-        onChange={(e) => setData({ ...data, child1Name: e.target.value })}
-        style={{ width: "100%", marginBottom: 10 }}
-      />
-      <input
-        placeholder="Nombre hija 2"
-        value={data.child2Name}
-        onChange={(e) => setData({ ...data, child2Name: e.target.value })}
-        style={{ width: "100%", marginBottom: 20 }}
-      />
+  const getMonthDates = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const dates = [];
 
-      <h3>Entrar como:</h3>
-      <button style={{ width: "100%", marginBottom: 10 }} onClick={() => setData({ ...data, profile: "father" }) || setScreen("menu")}>Continuar como {data.fatherName || "Padre"}</button>
-      <button style={{ width: "100%", marginBottom: 10 }} onClick={() => setData({ ...data, profile: "mother" }) || setScreen("menu")}>Continuar como {data.motherName || "Madre"}</button>
-      <button style={{ width: "100%", marginBottom: 10 }} onClick={() => setData({ ...data, profile: "child1" }) || setScreen("menu")}>Continuar como {data.child1Name || "Hijo 1"}</button>
-      <button style={{ width: "100%" }} onClick={() => setData({ ...data, profile: "child2" }) || setScreen("menu")}>Continuar como {data.child2Name || "Hijo 2"}</button>
-    </div>
-  );
+    const firstWeekDay = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+    for (let i = 0; i < firstWeekDay; i++) dates.push(null);
 
-  // ------------------- MENÚ -------------------
-  const renderMenu = () => (
-    <div style={{ padding: 20 }}>
-      <h2>Menú principal</h2>
-      <button style={{ width: "100%", marginBottom: 10 }} onClick={() => setScreen("week")}>Vista semanal</button>
-    </div>
-  );
+    for (let i = 1; i <= lastDay.getDate(); i++) dates.push(new Date(year, month, i));
+    return dates;
+  };
 
-  // ------------------ VISTA SEMANAL ------------------
-  const renderWeek = () => (
-    <div style={{ padding: 20 }}>
-      <h2>Semana (Lunes - Domingo)</h2>
+  const formatDate = (date) => date.toISOString().split('T')[0];
 
-      {week.map((d) => (
-        <div
-          key={d}
-          style={{
-            padding: 12,
-            background: "#eee",
-            borderRadius: 8,
-            marginBottom: 8,
-            cursor: data.profile === "child1" || data.profile === "child2" ? "default" : "pointer",
-          }}
-          onClick={() => {
-            if (data.profile === "father" || data.profile === "mother") {
-              setSelectedDay(d);
-              setScreen("day");
-            }
-          }}
-        >
-          {d}
+  const getScheduleKey = (date, child, period) => `${formatDate(date)}_${child}_${period}`;
+
+  const DailyView = () => (
+    <div className="p-2">
+      {periods.map(period => (
+        <div key={period} className="mb-3 border rounded p-2">
+          <div className="text-xs font-bold mb-2 uppercase">{period}</div>
+          <div className="grid grid-cols-2 gap-2">
+            {['child1', 'child2'].map(child => (
+              <div key={child} className="border rounded p-2">
+                <div className="text-xs font-medium mb-1">{children[child]}</div>
+                <select
+                  value={schedule[getScheduleKey(currentDate, child, period)] || ''}
+                  onChange={(e) => setSchedule({...schedule, [getScheduleKey(currentDate, child, period)]: e.target.value})}
+                  className="w-full text-xs p-1 border rounded"
+                  style={{ backgroundColor: schedule[getScheduleKey(currentDate, child, period)] ? colors[schedule[getScheduleKey(currentDate, child, period)]] + '20' : 'white' }}
+                  disabled={currentUser==='child1'||currentUser==='child2'}
+                >
+                  <option value="">Seleccionar</option>
+                  <option value="parent1">{parents.parent1}</option>
+                  <option value="parent2">{parents.parent2}</option>
+                </select>
+                <textarea
+                  placeholder="Observaciones"
+                  value={notes[getScheduleKey(currentDate, child, period)] || ''}
+                  onChange={(e) => setNotes(prev => ({ ...prev, [getScheduleKey(currentDate, child, period)]: e.target.value }))}
+                  className="w-full text-xs p-1 border rounded mt-1"
+                  style={{ minHeight: '50px' }}
+                  disabled={currentUser==='child1'||currentUser==='child2'}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       ))}
     </div>
   );
 
-  // ------------------ VISTA DÍA (solo padres) ------------------
-  const renderDay = () => (
-    <div style={{ padding: 20 }}>
-      <h2>{selectedDay}</h2>
+  const WeekView = () => {
+    const weekDates = getWeekDates(currentDate);
+    return (
+      <div className="p-2 overflow-x-auto">
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => setCurrentDate(d => { const newD = new Date(d); newD.setDate(d.getDate() - 7); return newD; })} className="p-1"><ChevronLeft size={18} /></button>
+          <div className="text-xs font-medium">Semana</div>
+          <button onClick={() => setCurrentDate(d => { const newD = new Date(d); newD.setDate(d.getDate() + 7); return newD; })} className="p-1"><ChevronRight size={18} /></button>
+        </div>
 
-      <label>Quién tiene a {data.child1Name}:</label>
-      <select style={{ width: "100%", marginBottom: 15 }}>
-        <option>{data.fatherName}</option>
-        <option>{data.motherName}</option>
-      </select>
+        <div className="grid grid-cols-7 gap-1 text-xs">
+          {weekDates.map((date, i) => (
+            <div key={i} className="border rounded p-1">
+              <div className="font-bold text-center mb-1">{daysOfWeek[i]} {date.getDate()}</div>
+              {periods.map(period => (
+                <div key={period} className="mb-1">
+                  <div className="text-[10px] font-medium">{period[0].toUpperCase()}</div>
+                  {['child1','child2'].map(child => {
+                    const parent = schedule[getScheduleKey(date, child, period)];
+                    return (
+                      <div key={child} className="text-[10px] px-1 rounded" style={{ backgroundColor: parent ? colors[parent]+'40' : '#f3f4f6', textAlign: 'center' }}>
+                        {parent ? (parent==='parent1'?parents.parent1:parents.parent2) : '-'}
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
-      <label>Quién tiene a {data.child2Name}:</label>
-      <select style={{ width: "100%", marginBottom: 20 }}>
-        <option>{data.fatherName}</option>
-        <option>{data.motherName}</option>
-      </select>
+  const MonthView = () => {
+    const monthDates = getMonthDates(currentDate);
+    return (
+      <div className="p-2">
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => setCurrentDate(d=>{const newD=new Date(d);newD.setMonth(d.getMonth()-1);return newD;})} className="p-1"><ChevronLeft size={18}/></button>
+          <div className="text-sm font-medium">{currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</div>
+          <button onClick={() => setCurrentDate(d=>{const newD=new Date(d);newD.setMonth(d.getMonth()+1);return newD;})} className="p-1"><ChevronRight size={18}/></button>
+        </div>
 
-      <button onClick={() => setScreen("week")}>Volver</button>
-    </div>
-  );
+        <div className="grid grid-cols-7 gap-1">
+          {daysOfWeek.map(day => <div key={day} className="text-xs font-bold text-center">{day}</div>)}
+          {monthDates.map((date,i)=>(
+            <div key={i} className="border rounded p-1 min-h-16">
+              {date && (
+                <>
+                  <div className="text-xs font-bold">{date.getDate()}</div>
+                  {periods.map(period=>(
+                    <div key={period} className="flex gap-0.5">
+                      {['child1','child2'].map(child=>{
+                        const parent = schedule[getScheduleKey(date,child,period)];
+                        return (
+                          <div key={child} className="flex-1 h-6 rounded relative" style={{backgroundColor: parent ? colors[parent] : '#e5e7eb'}}>
+                            {parent &&
+                              <span className="absolute inset-0 text-[8px] flex justify-center items-center font-medium">
+                                {parent==='parent1'?parents.parent1:parents.parent2}
+                              </span>
+                            }
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  };
 
-  // ------------------ RENDER GENERAL ------------------
-  if (screen === "setup") return renderSetup();
+  if(step==='setup'){
+    return <SetupScreen saveAndContinue={saveAndContinue} parents={parents} setParents={setParents} children={children} setChildren={setChildren} showNameEntry={showNameEntry} setShowNameEntry={setShowNameEntry} />;
+  }
+
+  const topBarColor = currentUser ? colors[currentUser] : '#3b82f6';
+  const profileBorder = currentUser ? borderColors[currentUser] : '#ffffff';
+  const displayName = currentUser==='parent1'?parents.parent1:currentUser==='parent2'?parents.parent2:currentUser;
 
   return (
-    <>
-      {renderHeader()}
-      {screen === "menu" && renderMenu()}
-      {screen === "week" && renderWeek()}
-      {screen === "day" && renderDay()}
-    </>
-  );
-}
+    <div className="max-w-md mx-auto h-screen flex flex-col bg-white">
+      <div className="flex items-center justify-between p-2" style={{ backgroundColor: topBarColor }}>
+        <div className="flex items-center gap-2 text-white">
+          <Users size={20}/>
+          <span className="font-bold text-sm">CoParenting</span>
+        </div>
+        <button onClick={()=>setStep('setup')} className="text-xs px-2 py-1 rounded border-2 font-medium"
+          style={{borderColor: profileBorder, backgroundColor:'white', color:topBarColor}}>
+          {displayName}
+        </button>
+      </div>
+
+      <div className="flex gap-1 p-2 border-b overflow-x-auto">
+        {!(currentUser==='child1'||currentUser==='child2') &&
+          <button onClick={()=>setCurrentView('daily')} className={`px-3 py-1 text-xs rounded flex items-center gap-1 whitespace-nowrap ${currentView==='daily'?'bg-blue-600 text-white':'bg-gray-100'}`}><Calendar size={14}/>Día</button>}
+        <button onClick={()=>setCurrentView('week')} className={`px-3 py-1 text-xs rounded whitespace-nowrap ${currentView==='week'?'bg-blue-600 text-white':'bg-gray-100'}`}>Semana</button>
+        <button onClick={()=>setCurrentView('month')} className={`px-3 py-1 text-xs rounded whitespace-nowrap ${currentView==='month'?'bg-blue-600 text-white':'bg-gray-100'}`}>Mes</button>
+        {!(currentUser==='child1'||currentUser==='child2') &&
+          <button onClick={()=>setCurrentView('stats')} className={`px-3 py-1 text-xs rounded flex items-center gap-1 whitespace-nowrap ${currentView==='stats'?'bg-blue-600 text-white':'bg-gray-100'}`}><BarChart3 size={14}/>Estadísticas</button>}
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {currentView==='daily' && DailyView()}
+        {currentView==='week' && WeekView()}
+        {currentView==='month' && MonthView()}
+      </div>
+    </div>
+  )
+};
+
+export default CoParentingApp;
