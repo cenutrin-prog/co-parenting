@@ -11,7 +11,6 @@ const CoParentingApp = () => {
   const [parents, setParents] = useState(savedParents ? JSON.parse(savedParents) : { parent1: '', parent2: '', other: '' });
   const [children, setChildren] = useState(savedChildren ? JSON.parse(savedChildren) : { child1: '', child2: '' });
 
-  // colores: parent1 = Papá (verde), parent2 = Mamá (amarillo)
   const [colors] = useState({ parent1: '#86efac', parent2: '#fde047', child1: '#60a5fa', child2: '#f9a8d4', other: '#10B981' });
   const [borderColors] = useState({ parent1: '#065f46', parent2: '#713f12', child1: '#1e3a8a', child2: '#831843', other: '#065f46' });
 
@@ -20,12 +19,11 @@ const CoParentingApp = () => {
   const [notes, setNotes] = useState({});      // keys: YYYY-MM-DD_child_period -> text
   const [currentView, setCurrentView] = useState('week'); // 'daily'|'week'|'month'|'stats'
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [popupObs, setPopupObs] = useState(null); // { text } or null
+  const [popupObs, setPopupObs] = useState(null); // string or null
 
   const periods = ['Mañana', 'Tarde', 'Noche'];
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
-  // persistir nombres
   const saveAndContinue = (user) => {
     localStorage.setItem('coparenting_parents', JSON.stringify(parents));
     localStorage.setItem('coparenting_children', JSON.stringify(children));
@@ -35,15 +33,14 @@ const CoParentingApp = () => {
     setCurrentView('week');
   };
 
-  // utilidades
   const formatDate = (d) => {
     if (!d) return '';
     const date = new Date(d);
-    return date.toISOString().split('T')[0];
+    const iso = date.toISOString().split('T')[0];
+    return iso;
   };
   const getScheduleKey = (date, child, period) => `${formatDate(date)}_${child}_${period}`;
 
-  // semana empezando Lunes
   const getWeekDates = (date) => {
     const curr = new Date(date);
     const day = curr.getDay();
@@ -69,12 +66,21 @@ const CoParentingApp = () => {
     return dates;
   };
 
-  // Manejo estable de textarea: claves estables basadas en fecha-string, child y periodo.
-  // Cambios en notes usan función prev para evitar referencias rotas.
+  // helpers para cambiar fecha SIN mutar currentDate
+  const addDays = (d, days) => {
+    const nd = new Date(d);
+    nd.setDate(nd.getDate() + days);
+    return nd;
+  };
+  const addMonths = (d, months) => {
+    const nd = new Date(d);
+    nd.setMonth(nd.getMonth() + months);
+    return nd;
+  };
 
   // ---------- VISTAS ----------
+
   const DailyView = () => {
-    const dateKey = formatDate(currentDate);
     return (
       <div className="p-2" style={{ fontSize: 12 }}>
         {periods.map((period) => (
@@ -101,8 +107,8 @@ const CoParentingApp = () => {
                       {parents.other && <option value="other">{parents.other}</option>}
                     </select>
 
+                    {/* NO usar `key` en el textarea: evita remounts que hacen perder el foco */}
                     <textarea
-                      key={`ta_${key}`} // clave estable evita remount inesperado
                       value={notes[key] || ''}
                       onChange={(e) => setNotes(prev => ({ ...prev, [key]: e.target.value }))}
                       disabled={currentUser === 'child1' || currentUser === 'child2'}
@@ -125,20 +131,18 @@ const CoParentingApp = () => {
     const lastMonth = weekDates[6].toLocaleDateString('es-ES', { month: 'long' });
     const monthLabel = firstMonth === lastMonth ? firstMonth : `${firstMonth} / ${lastMonth}`;
 
-    // Decide qué niños mostrar: si perfil es childX, solo su info; si padre/madre, mostrar ambos hijos.
     const childrenToShow = currentUser === 'child1' ? ['child1'] : currentUser === 'child2' ? ['child2'] : ['child1', 'child2'];
 
     return (
       <div className="p-1" style={{ fontSize: 11 }}>
         <div className="flex items-center justify-between mb-1">
-          <button onClick={() => { const d = new Date(currentDate); d.setDate(currentDate.getDate() - 7); setCurrentDate(new Date(d)); }} className="p-1"><ChevronLeft size={16} /></button>
+          <button onClick={() => setCurrentDate(d => addDays(d, -7))} className="p-1"><ChevronLeft size={16} /></button>
           <div className="text-xs font-medium">{monthLabel}</div>
-          <button onClick={() => { const d = new Date(currentDate); d.setDate(currentDate.getDate() + 7); setCurrentDate(new Date(d)); }} className="p-1"><ChevronRight size={16} /></button>
+          <button onClick={() => setCurrentDate(d => addDays(d, 7))} className="p-1"><ChevronRight size={16} /></button>
         </div>
 
         <div className="grid" style={{ gridTemplateColumns: '60px repeat(7, 1fr)', gap: 4 }}>
-          {/* columna izquierda con Mañana/Tarde/Noche */}
-          <div></div>
+          <div /> {/* espacio esquina */}
           {weekDates.map((d, i) => (
             <div key={formatDate(d)} className="text-center font-bold text-[11px]">{daysOfWeek[i]} {d.getDate()}</div>
           ))}
@@ -146,27 +150,26 @@ const CoParentingApp = () => {
           {periods.map((period) => (
             <React.Fragment key={period}>
               <div className="font-bold text-[11px]">{period}</div>
-
               {weekDates.map((d) => (
                 <div key={`${formatDate(d)}_${period}`} className="border rounded p-1 min-h-[56px]" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {childrenToShow.map((child) => {
                     const key = getScheduleKey(d, child, period);
                     const assigned = schedule[key];
                     const obs = notes[key] || '';
-                    // Si perfil es padre/madre, mostramos nombre del hijo en color del hijo (child color) cuando ese hijo está asignado a ese padre en esa franja.
+
                     if (currentUser === 'parent1' || currentUser === 'parent2') {
-                      // mostrar para cada hijo: su nombre si en esa franja ese hijo está con este padre
+                      // padre/madre: mostrar nombre del hijo si ese hijo está con este padre en esa franja
                       const isWithThisParent = assigned === currentUser;
                       return (
                         <React.Fragment key={key}>
                           <div className="text-[10px] text-center rounded" style={{ backgroundColor: isWithThisParent ? colors[child] : '#f3f4f6' }}>
-                            {isWithThisParent ? children[child] || (child==='child1'?'Hijo 1':'Hijo 2') : '-'}
+                            {isWithThisParent ? (children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2')) : '-'}
                           </div>
                           <div className="text-[8px] text-center">{obs || '-'}</div>
                         </React.Fragment>
                       );
                     } else {
-                      // perfil hijo: mostramos Papá/Mamá en la franja superior y observaciones debajo
+                      // perfil hijo: mostrar Papá/Mamá en color del padre y observaciones
                       return (
                         <React.Fragment key={key}>
                           <div className="text-[10px] text-center rounded" style={{ backgroundColor: assigned ? colors[assigned] : '#f3f4f6' }}>
@@ -190,13 +193,12 @@ const CoParentingApp = () => {
     const monthDates = getMonthDates(currentDate);
     const monthLabel = currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
 
-    // padres ven 3 franjas horizontales por día: mañana/tarde/noche con nombre del hijo (color del hijo) o guión
     return (
       <div className="p-1" style={{ fontSize: 10 }}>
         <div className="flex items-center justify-between mb-1">
-          <button onClick={() => { const d = new Date(currentDate); d.setMonth(currentDate.getMonth() - 1); setCurrentDate(new Date(d)); }} className="p-1"><ChevronLeft size={16} /></button>
+          <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={16} /></button>
           <div className="text-xs font-medium">{monthLabel}</div>
-          <button onClick={() => { const d = new Date(currentDate); d.setMonth(currentDate.getMonth() + 1); setCurrentDate(new Date(d)); }} className="p-1"><ChevronRight size={16} /></button>
+          <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={16} /></button>
         </div>
 
         <div className="grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
@@ -209,21 +211,20 @@ const CoParentingApp = () => {
                 {date ? (
                   <>
                     {periods.map((period) => {
-                      // para cada periodo mostrar solo un recuadro horizontal por día cuando el perfil es padre
                       if (currentUser === 'parent1' || currentUser === 'parent2') {
-                        // buscamos si child1 o child2 está asignado a este padre en este periodo
-                        const childMorning = schedule[getScheduleKey(date, 'child1', period)] === currentUser ? 'child1' : null;
-                        const child2Assigned = schedule[getScheduleKey(date, 'child2', period)] === currentUser ? 'child2' : null;
-                        // priorizar mostrar child1 then child2 if both? mostramos ambos: nombre si tiene
-                        const nameToShow = childMorning ? (children[childMorning] || (childMorning==='child1'?'Hijo 1':'Hijo 2')) : (child2Assigned ? (children[child2Assigned] || (child2Assigned==='child1'?'Hijo 1':'Hijo 2')) : '-');
+                        // mostrar nombre del hijo si asignado a este padre en ese periodo; si no, '-'
+                        const childAssigned1 = schedule[getScheduleKey(date, 'child1', period)] === currentUser ? 'child1' : null;
+                        const childAssigned2 = schedule[getScheduleKey(date, 'child2', period)] === currentUser ? 'child2' : null;
+                        const nameToShow = childAssigned1 ? (children.child1 || 'Hijo 1') : (childAssigned2 ? (children.child2 || 'Hijo 2') : '-');
                         const hasObs = !!(notes[getScheduleKey(date, 'child1', period)] || notes[getScheduleKey(date, 'child2', period)]);
+                        const bg = nameToShow === (children.child1 || 'Hijo 1') ? colors.child1 : nameToShow === (children.child2 || 'Hijo 2') ? colors.child2 : '#f3f4f6';
                         return (
-                          <div key={`${dateKey}_${period}`} className="text-[9px] text-center border-b py-0.5" style={{ backgroundColor: nameToShow !== '-' ? (nameToShow === children.child1 ? colors.child1 : nameToShow === children.child2 ? colors.child2 : '#f3f4f6') : '#f3f4f6' }}>
+                          <div key={`${dateKey}_${period}`} className="text-[9px] text-center border-b py-0.5" style={{ backgroundColor: bg }}>
                             <span>{nameToShow}</span>{hasObs ? <span style={{ marginLeft: 4 }}>*</span> : null}
                           </div>
                         );
                       } else {
-                        // perfil hijo: mostrar Papá/Mamá o guión y * si hay observaciones
+                        // perfil hijo: mostrar Papá/Mamá o '-'
                         const assignedParent = schedule[getScheduleKey(date, currentUser, period)];
                         const obsText = notes[getScheduleKey(date, currentUser, period)];
                         return (
@@ -242,10 +243,9 @@ const CoParentingApp = () => {
           })}
         </div>
 
-        {/* popup observaciones */}
         {popupObs && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center" onClick={() => setPopupObs(null)}>
-            <div className="bg-white p-3 rounded max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white p-3 rounded max-w-md" onClick={e => e.stopPropagation()}>
               <div className="text-sm">{popupObs}</div>
               <div className="mt-2 text-right">
                 <button onClick={() => setPopupObs(null)} className="px-3 py-1 bg-blue-600 text-white rounded text-xs">Cerrar</button>
