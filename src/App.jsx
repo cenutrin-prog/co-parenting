@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Calendar, Users, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import SetupScreen from './SetupScreen';
 
 const CoParentingApp = () => {
+  // --- Persistencia nombres ---
   const savedParents = typeof window !== 'undefined' ? localStorage.getItem('coparenting_parents') : null;
   const savedChildren = typeof window !== 'undefined' ? localStorage.getItem('coparenting_children') : null;
 
@@ -11,20 +12,22 @@ const CoParentingApp = () => {
   const [parents, setParents] = useState(savedParents ? JSON.parse(savedParents) : { parent1: '', parent2: '', other: '' });
   const [children, setChildren] = useState(savedChildren ? JSON.parse(savedChildren) : { child1: '', child2: '' });
 
+  // colores y bordes
   const [colors] = useState({ parent1: '#86efac', parent2: '#fde047', child1: '#60a5fa', child2: '#f9a8d4', other: '#10B981' });
   const [borderColors] = useState({ parent1: '#065f46', parent2: '#713f12', child1: '#1e3a8a', child2: '#831843', other: '#065f46' });
 
+  // estado principal
   const [currentUser, setCurrentUser] = useState(null); // 'parent1'|'parent2'|'child1'|'child2'
   const [schedule, setSchedule] = useState({}); // keys: YYYY-MM-DD_child_period -> 'parent1'|'parent2'|'other'
-  const [notes, setNotes] = useState({});      // keys: YYYY-MM-DD_child_period -> text
+  const [notes, setNotes] = useState({});    // keys: YYYY-MM-DD_child_period -> text
   const [currentView, setCurrentView] = useState('week'); // 'daily'|'week'|'month'|'stats'
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [popupObs, setPopupObs] = useState(null); // string or null
+  const [popupObs, setPopupObs] = useState(null);
 
   const periods = ['Mañana', 'Tarde', 'Noche'];
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
-  // Persistir nombres
+  // Persistir nombres y entrar
   const saveAndContinue = (user) => {
     localStorage.setItem('coparenting_parents', JSON.stringify(parents));
     localStorage.setItem('coparenting_children', JSON.stringify(children));
@@ -34,7 +37,7 @@ const CoParentingApp = () => {
     setCurrentView('week');
   };
 
-  // UTIL
+  // --- utilidades de fecha y keys estables ---
   const formatDate = (d) => {
     if (!d) return '';
     const date = new Date(d);
@@ -78,24 +81,54 @@ const CoParentingApp = () => {
     return nd;
   };
 
-  // Texto de observaciones: componente interno que mantiene estado local para evitar pérdida de foco.
-  const ObsTextarea = ({ value, onChange, disabled }) => {
+  // --- COMPONENTE OBS TEXTAREA robusto ---
+  const ObsTextarea = ({ value, onChange, disabled, id }) => {
     const [local, setLocal] = useState(value || '');
+    const ref = useRef(null);
+    const selRef = useRef({ start: null, end: null });
 
-    // Sincroniza si value cambia desde fuera (por ejemplo cargar otro día)
+    // sincronizar desde valor externo sin forzar cursor a inicio
     useEffect(() => {
-      if (value !== local) setLocal(value || '');
+      if (value !== local) {
+        // si el textarea está enfocado, guardamos la selección actual y la restauramos
+        const ta = ref.current;
+        if (ta && document.activeElement === ta) {
+          // si está enfocado, no override completo para no perder cursor
+          // solo actualizar si diferencia grande; pero para seguridad, actualizamos local sin tocar caret
+          setLocal(value || '');
+          return;
+        }
+        setLocal(value || '');
+      }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [value]);
 
+    useEffect(() => {
+      // restaurar selección si la tenemos guardada (caso raro)
+      const ta = ref.current;
+      if (ta && selRef.current.start !== null) {
+        try {
+          ta.setSelectionRange(selRef.current.start, selRef.current.end);
+        } catch (e) { /* ignore */ }
+        selRef.current.start = selRef.current.end = null;
+      }
+    });
+
     return (
       <textarea
+        id={id}
+        ref={ref}
         value={local}
         onChange={(e) => {
           const nv = e.target.value;
+          // guardar selección antes de actualizar (para poder restaurar si necesario)
+          try {
+            selRef.current.start = e.target.selectionStart;
+            selRef.current.end = e.target.selectionEnd;
+          } catch (err) {
+            selRef.current.start = selRef.current.end = null;
+          }
           setLocal(nv);
-          // Llamada al padre *inmediata* para que otras vistas reflejen el cambio;
-          // local state evita pérdida de foco aunque el padre re-renderice.
           onChange(nv);
         }}
         disabled={disabled}
@@ -107,6 +140,7 @@ const CoParentingApp = () => {
 
   // ---------- VISTAS ----------
   const DailyView = () => {
+    const dateStr = formatDate(currentDate);
     return (
       <div className="p-2" style={{ fontSize: 12 }}>
         {periods.map((period) => (
@@ -114,18 +148,24 @@ const CoParentingApp = () => {
             <div className="text-xs font-bold mb-1 uppercase">{period}</div>
 
             <div className="grid grid-cols-2 gap-2">
+              {/* Siempre renderizamos ambos bloques (child1 y child2) para evitar remount */}
               {['child1', 'child2'].map((child) => {
-                const key = getScheduleKey(currentDate, child, period);
+                const sk = getScheduleKey(currentDate, child, period);
                 return (
-                  <div key={key} className="border rounded p-1">
+                  <div
+                    key={sk}
+                    className="border rounded p-1"
+                    // si perfil es childX y no corresponde a este bloque, ocultar con CSS en vez de eliminar
+                    style={{ display: (currentUser === 'child1' && child !== 'child1') || (currentUser === 'child2' && child !== 'child2') ? 'none' : 'block' }}
+                  >
                     <div className="text-xs font-medium mb-1">{children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2')}</div>
 
                     <select
-                      value={schedule[key] || ''}
-                      onChange={(e) => setSchedule(prev => ({ ...prev, [key]: e.target.value }))}
+                      value={schedule[sk] || ''}
+                      onChange={(e) => setSchedule(prev => ({ ...prev, [sk]: e.target.value }))}
                       disabled={currentUser === 'child1' || currentUser === 'child2'}
                       className="w-full text-xs p-1 border rounded"
-                      style={{ backgroundColor: schedule[key] ? colors[schedule[key]] + '40' : 'white' }}
+                      style={{ backgroundColor: schedule[sk] ? colors[schedule[sk]] + '40' : 'white' }}
                     >
                       <option value="">Seleccionar</option>
                       <option value="parent1">{parents.parent1 || 'Papá'}</option>
@@ -134,8 +174,9 @@ const CoParentingApp = () => {
                     </select>
 
                     <ObsTextarea
-                      value={notes[key] || ''}
-                      onChange={(nv) => setNotes(prev => ({ ...prev, [key]: nv }))}
+                      id={`obs_${sk}`}
+                      value={notes[sk] || ''}
+                      onChange={(nv) => setNotes(prev => ({ ...prev, [sk]: nv }))}
                       disabled={currentUser === 'child1' || currentUser === 'child2'}
                     />
                   </div>
@@ -154,8 +195,7 @@ const CoParentingApp = () => {
     const lastMonth = weekDates[6].toLocaleDateString('es-ES', { month: 'long' });
     const monthLabel = firstMonth === lastMonth ? firstMonth : `${firstMonth} / ${lastMonth}`;
 
-    const childrenToShow = currentUser === 'child1' ? ['child1'] : currentUser === 'child2' ? ['child2'] : ['child1', 'child2'];
-
+    // DOM estable: siempre procesamos dos hijos pero usamos CSS para mostrar/ocultar en perfiles hijo
     return (
       <div className="p-1" style={{ fontSize: 11 }}>
         <div className="flex items-center justify-between mb-1">
@@ -173,19 +213,17 @@ const CoParentingApp = () => {
           {periods.map((period) => (
             <React.Fragment key={period}>
               <div className="font-bold text-[11px]">{period}</div>
-
               {weekDates.map((d) => (
                 <div key={`${formatDate(d)}_${period}`} className="border rounded p-1 min-h-[56px]" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {childrenToShow.map((child) => {
-                    const key = getScheduleKey(d, child, period);
-                    const assigned = schedule[key];
-                    const obs = notes[key] || '';
-
+                  {['child1', 'child2'].map((child) => {
+                    const sk = getScheduleKey(d, child, period);
+                    const assigned = schedule[sk];
+                    const obs = notes[sk] || '';
+                    // Si perfil es padre: mostrar nombre del hijo si ese hijo está con este padre, y observaciones debajo
                     if (currentUser === 'parent1' || currentUser === 'parent2') {
-                      // padre/madre: mostrar nombre del hijo si ese hijo está con este padre en esa franja
                       const isWithThisParent = assigned === currentUser;
                       return (
-                        <React.Fragment key={key + '_frag'}>
+                        <React.Fragment key={sk}>
                           <div className="text-[10px] text-center rounded" style={{ backgroundColor: isWithThisParent ? colors[child] : '#f3f4f6' }}>
                             {isWithThisParent ? (children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2')) : '-'}
                           </div>
@@ -193,9 +231,9 @@ const CoParentingApp = () => {
                         </React.Fragment>
                       );
                     } else {
-                      // perfil hijo: Papá/Mamá y observaciones
+                      // perfil hijo: mostramos Papá/Mamá y observaciones
                       return (
-                        <React.Fragment key={key + '_frag2'}>
+                        <React.Fragment key={sk}>
                           <div className="text-[10px] text-center rounded" style={{ backgroundColor: assigned ? colors[assigned] : '#f3f4f6' }}>
                             {assigned ? (assigned === 'parent1' ? 'Papá' : assigned === 'parent2' ? 'Mamá' : parents.other || 'Otro') : '-'}
                           </div>
@@ -236,7 +274,6 @@ const CoParentingApp = () => {
                   <>
                     {periods.map((period) => {
                       if (currentUser === 'parent1' || currentUser === 'parent2') {
-                        // mostrar nombre del hijo si asignado a este padre en ese periodo; si no, '-'
                         const childAssigned1 = schedule[getScheduleKey(date, 'child1', period)] === currentUser ? 'child1' : null;
                         const childAssigned2 = schedule[getScheduleKey(date, 'child2', period)] === currentUser ? 'child2' : null;
                         const nameToShow = childAssigned1 ? (children.child1 || 'Hijo 1') : (childAssigned2 ? (children.child2 || 'Hijo 2') : '-');
@@ -248,7 +285,6 @@ const CoParentingApp = () => {
                           </div>
                         );
                       } else {
-                        // perfil hijo
                         const assignedParent = schedule[getScheduleKey(date, currentUser, period)];
                         const obsText = notes[getScheduleKey(date, currentUser, period)];
                         return (
@@ -283,12 +319,14 @@ const CoParentingApp = () => {
 
   // ---------- RENDER PRINCIPAL ----------
   if (step === 'setup') {
-    return <SetupScreen
-      saveAndContinue={saveAndContinue}
-      parents={parents} setParents={setParents}
-      children={children} setChildren={setChildren}
-      showNameEntry={showNameEntry} setShowNameEntry={setShowNameEntry}
-    />;
+    return (
+      <SetupScreen
+        saveAndContinue={saveAndContinue}
+        parents={parents} setParents={setParents}
+        children={children} setChildren={setChildren}
+        showNameEntry={showNameEntry} setShowNameEntry={setShowNameEntry}
+      />
+    );
   }
 
   const topBarColor = currentUser ? colors[currentUser] : '#3b82f6';
