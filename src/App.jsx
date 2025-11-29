@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { Calendar, Users, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import SetupScreen from './SetupScreen';
 
@@ -81,66 +81,8 @@ const CoParentingApp = () => {
     return nd;
   };
 
-  // --- COMPONENTE OBS TEXTAREA robusto ---
-  const ObsTextarea = ({ value, onChange, disabled, id }) => {
-    const [local, setLocal] = useState(value || '');
-    const ref = useRef(null);
-    const selRef = useRef({ start: null, end: null });
-
-    // sincronizar desde valor externo sin forzar cursor a inicio
-    useEffect(() => {
-      if (value !== local) {
-        // si el textarea está enfocado, guardamos la selección actual y la restauramos
-        const ta = ref.current;
-        if (ta && document.activeElement === ta) {
-          // si está enfocado, no override completo para no perder cursor
-          // solo actualizar si diferencia grande; pero para seguridad, actualizamos local sin tocar caret
-          setLocal(value || '');
-          return;
-        }
-        setLocal(value || '');
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [value]);
-
-    useEffect(() => {
-      // restaurar selección si la tenemos guardada (caso raro)
-      const ta = ref.current;
-      if (ta && selRef.current.start !== null) {
-        try {
-          ta.setSelectionRange(selRef.current.start, selRef.current.end);
-        } catch (e) { /* ignore */ }
-        selRef.current.start = selRef.current.end = null;
-      }
-    });
-
-    return (
-      <textarea
-        id={id}
-        ref={ref}
-        value={local}
-        onChange={(e) => {
-          const nv = e.target.value;
-          // guardar selección antes de actualizar (para poder restaurar si necesario)
-          try {
-            selRef.current.start = e.target.selectionStart;
-            selRef.current.end = e.target.selectionEnd;
-          } catch (err) {
-            selRef.current.start = selRef.current.end = null;
-          }
-          setLocal(nv);
-          onChange(nv);
-        }}
-        disabled={disabled}
-        className="w-full text-xs p-1 border rounded mt-1"
-        style={{ minHeight: 44, resize: 'vertical' }}
-      />
-    );
-  };
-
   // ---------- VISTAS ----------
   const DailyView = () => {
-    const dateStr = formatDate(currentDate);
     return (
       <div className="p-2" style={{ fontSize: 12 }}>
         {periods.map((period) => (
@@ -148,17 +90,20 @@ const CoParentingApp = () => {
             <div className="text-xs font-bold mb-1 uppercase">{period}</div>
 
             <div className="grid grid-cols-2 gap-2">
-              {/* Siempre renderizamos ambos bloques (child1 y child2) para evitar remount */}
               {['child1', 'child2'].map((child) => {
                 const sk = getScheduleKey(currentDate, child, period);
+                const shouldShow = !(
+                  (currentUser === 'child1' && child !== 'child1') || 
+                  (currentUser === 'child2' && child !== 'child2')
+                );
+                
+                if (!shouldShow) return null;
+
                 return (
-                  <div
-                    key={sk}
-                    className="border rounded p-1"
-                    // si perfil es childX y no corresponde a este bloque, ocultar con CSS en vez de eliminar
-                    style={{ display: (currentUser === 'child1' && child !== 'child1') || (currentUser === 'child2' && child !== 'child2') ? 'none' : 'block' }}
-                  >
-                    <div className="text-xs font-medium mb-1">{children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2')}</div>
+                  <div key={sk} className="border rounded p-1">
+                    <div className="text-xs font-medium mb-1">
+                      {children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2')}
+                    </div>
 
                     <select
                       value={schedule[sk] || ''}
@@ -173,11 +118,16 @@ const CoParentingApp = () => {
                       {parents.other && <option value="other">{parents.other}</option>}
                     </select>
 
-                    <ObsTextarea
-                      id={`obs_${sk}`}
+                    <textarea
+                      placeholder="Observaciones..."
                       value={notes[sk] || ''}
-                      onChange={(nv) => setNotes(prev => ({ ...prev, [sk]: nv }))}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setNotes(prev => ({ ...prev, [sk]: newValue }));
+                      }}
                       disabled={currentUser === 'child1' || currentUser === 'child2'}
+                      className="w-full text-xs p-1 border rounded mt-1"
+                      style={{ minHeight: 44, resize: 'vertical' }}
                     />
                   </div>
                 );
@@ -195,46 +145,60 @@ const CoParentingApp = () => {
     const lastMonth = weekDates[6].toLocaleDateString('es-ES', { month: 'long' });
     const monthLabel = firstMonth === lastMonth ? firstMonth : `${firstMonth} / ${lastMonth}`;
 
-    // DOM estable: siempre procesamos dos hijos pero usamos CSS para mostrar/ocultar en perfiles hijo
     return (
       <div className="p-1" style={{ fontSize: 11 }}>
         <div className="flex items-center justify-between mb-1">
-          <button onClick={() => setCurrentDate(d => addDays(d, -7))} className="p-1"><ChevronLeft size={16} /></button>
+          <button onClick={() => setCurrentDate(d => addDays(d, -7))} className="p-1">
+            <ChevronLeft size={16} />
+          </button>
           <div className="text-xs font-medium">{monthLabel}</div>
-          <button onClick={() => setCurrentDate(d => addDays(d, 7))} className="p-1"><ChevronRight size={16} /></button>
+          <button onClick={() => setCurrentDate(d => addDays(d, 7))} className="p-1">
+            <ChevronRight size={16} />
+          </button>
         </div>
 
         <div className="grid" style={{ gridTemplateColumns: '60px repeat(7, 1fr)', gap: 4 }}>
           <div /> {/* esquina */}
           {weekDates.map((d, i) => (
-            <div key={formatDate(d)} className="text-center font-bold text-[11px]">{daysOfWeek[i]} {d.getDate()}</div>
+            <div key={formatDate(d)} className="text-center font-bold text-[11px]">
+              {daysOfWeek[i]} {d.getDate()}
+            </div>
           ))}
 
           {periods.map((period) => (
             <React.Fragment key={period}>
               <div className="font-bold text-[11px]">{period}</div>
               {weekDates.map((d) => (
-                <div key={`${formatDate(d)}_${period}`} className="border rounded p-1 min-h-[56px]" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div 
+                  key={`${formatDate(d)}_${period}`} 
+                  className="border rounded p-1 min-h-[56px]" 
+                  style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+                >
                   {['child1', 'child2'].map((child) => {
                     const sk = getScheduleKey(d, child, period);
                     const assigned = schedule[sk];
                     const obs = notes[sk] || '';
-                    // Si perfil es padre: mostrar nombre del hijo si ese hijo está con este padre, y observaciones debajo
+                    
                     if (currentUser === 'parent1' || currentUser === 'parent2') {
                       const isWithThisParent = assigned === currentUser;
                       return (
                         <React.Fragment key={sk}>
-                          <div className="text-[10px] text-center rounded" style={{ backgroundColor: isWithThisParent ? colors[child] : '#f3f4f6' }}>
+                          <div 
+                            className="text-[10px] text-center rounded" 
+                            style={{ backgroundColor: isWithThisParent ? colors[child] : '#f3f4f6' }}
+                          >
                             {isWithThisParent ? (children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2')) : '-'}
                           </div>
                           <div className="text-[8px] text-center">{obs || '-'}</div>
                         </React.Fragment>
                       );
                     } else {
-                      // perfil hijo: mostramos Papá/Mamá y observaciones
                       return (
                         <React.Fragment key={sk}>
-                          <div className="text-[10px] text-center rounded" style={{ backgroundColor: assigned ? colors[assigned] : '#f3f4f6' }}>
+                          <div 
+                            className="text-[10px] text-center rounded" 
+                            style={{ backgroundColor: assigned ? colors[assigned] : '#f3f4f6' }}
+                          >
                             {assigned ? (assigned === 'parent1' ? 'Papá' : assigned === 'parent2' ? 'Mamá' : parents.other || 'Otro') : '-'}
                           </div>
                           <div className="text-[8px] text-center">{obs || ''}</div>
@@ -258,13 +222,19 @@ const CoParentingApp = () => {
     return (
       <div className="p-1" style={{ fontSize: 10 }}>
         <div className="flex items-center justify-between mb-1">
-          <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={16} /></button>
+          <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1">
+            <ChevronLeft size={16} />
+          </button>
           <div className="text-xs font-medium">{monthLabel}</div>
-          <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={16} /></button>
+          <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1">
+            <ChevronRight size={16} />
+          </button>
         </div>
 
         <div className="grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-          {daysOfWeek.map(d => <div key={d} className="text-[9px] font-bold text-center">{d}</div>)}
+          {daysOfWeek.map(d => (
+            <div key={d} className="text-[9px] font-bold text-center">{d}</div>
+          ))}
 
           {monthDates.map((date, idx) => {
             const dateKey = date ? formatDate(date) : `empty-${idx}`;
@@ -280,16 +250,28 @@ const CoParentingApp = () => {
                         const hasObs = !!(notes[getScheduleKey(date, 'child1', period)] || notes[getScheduleKey(date, 'child2', period)]);
                         const bg = nameToShow === (children.child1 || 'Hijo 1') ? colors.child1 : nameToShow === (children.child2 || 'Hijo 2') ? colors.child2 : '#f3f4f6';
                         return (
-                          <div key={`${dateKey}_${period}`} className="text-[9px] text-center border-b py-0.5" style={{ backgroundColor: bg }}>
-                            <span>{nameToShow}</span>{hasObs ? <span style={{ marginLeft: 4 }}>*</span> : null}
+                          <div 
+                            key={`${dateKey}_${period}`} 
+                            className="text-[9px] text-center border-b py-0.5" 
+                            style={{ backgroundColor: bg }}
+                          >
+                            <span>{nameToShow}</span>
+                            {hasObs ? <span style={{ marginLeft: 4 }}>*</span> : null}
                           </div>
                         );
                       } else {
                         const assignedParent = schedule[getScheduleKey(date, currentUser, period)];
                         const obsText = notes[getScheduleKey(date, currentUser, period)];
                         return (
-                          <div key={`${dateKey}_${period}`} className="text-[9px] text-center border-b py-0.5" style={{ backgroundColor: assignedParent ? colors[assignedParent] : '#f3f4f6' }}>
-                            <span>{assignedParent ? (assignedParent === 'parent1' ? 'Papá' : assignedParent === 'parent2' ? 'Mamá' : parents.other || 'Otro') : '-'}</span>{obsText ? <span style={{ marginLeft: 4 }}>*</span> : null}
+                          <div 
+                            key={`${dateKey}_${period}`} 
+                            className="text-[9px] text-center border-b py-0.5" 
+                            style={{ backgroundColor: assignedParent ? colors[assignedParent] : '#f3f4f6' }}
+                          >
+                            <span>
+                              {assignedParent ? (assignedParent === 'parent1' ? 'Papá' : assignedParent === 'parent2' ? 'Mamá' : parents.other || 'Otro') : '-'}
+                            </span>
+                            {obsText ? <span style={{ marginLeft: 4 }}>*</span> : null}
                           </div>
                         );
                       }
@@ -304,11 +286,22 @@ const CoParentingApp = () => {
         </div>
 
         {popupObs && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center" onClick={() => setPopupObs(null)}>
-            <div className="bg-white p-3 rounded max-w-md" onClick={e => e.stopPropagation()}>
+          <div 
+            className="fixed inset-0 bg-black/40 flex items-center justify-center" 
+            onClick={() => setPopupObs(null)}
+          >
+            <div 
+              className="bg-white p-3 rounded max-w-md" 
+              onClick={e => e.stopPropagation()}
+            >
               <div className="text-sm">{popupObs}</div>
               <div className="mt-2 text-right">
-                <button onClick={() => setPopupObs(null)} className="px-3 py-1 bg-blue-600 text-white rounded text-xs">Cerrar</button>
+                <button 
+                  onClick={() => setPopupObs(null)} 
+                  className="px-3 py-1 bg-blue-600 text-white rounded text-xs"
+                >
+                  Cerrar
+                </button>
               </div>
             </div>
           </div>
@@ -322,20 +315,29 @@ const CoParentingApp = () => {
     return (
       <SetupScreen
         saveAndContinue={saveAndContinue}
-        parents={parents} setParents={setParents}
-        children={children} setChildren={setChildren}
-        showNameEntry={showNameEntry} setShowNameEntry={setShowNameEntry}
+        parents={parents} 
+        setParents={setParents}
+        children={children} 
+        setChildren={setChildren}
+        showNameEntry={showNameEntry} 
+        setShowNameEntry={setShowNameEntry}
       />
     );
   }
 
   const topBarColor = currentUser ? colors[currentUser] : '#3b82f6';
   const profileBorder = currentUser ? borderColors[currentUser] : '#ffffff';
-  const displayName = currentUser === 'child1' ? children.child1 : currentUser === 'child2' ? children.child2 : currentUser === 'parent1' ? parents.parent1 : currentUser === 'parent2' ? parents.parent2 : 'Usuario';
+  const displayName = currentUser === 'child1' ? children.child1 : 
+                      currentUser === 'child2' ? children.child2 : 
+                      currentUser === 'parent1' ? parents.parent1 : 
+                      currentUser === 'parent2' ? parents.parent2 : 'Usuario';
 
   return (
     <div className="max-w-md mx-auto h-screen flex flex-col bg-white">
-      <div className="flex items-center justify-between p-2" style={{ backgroundColor: topBarColor }}>
+      <div 
+        className="flex items-center justify-between p-2" 
+        style={{ backgroundColor: topBarColor }}
+      >
         <div className="flex items-center gap-2 text-white">
           <Users size={18} />
           <span className="font-bold text-sm">CoParenting</span>
@@ -343,7 +345,11 @@ const CoParentingApp = () => {
         <button
           onClick={() => { setStep('setup'); setShowNameEntry(false); }}
           className="text-xs px-2 py-1 rounded border-2 font-medium"
-          style={{ borderColor: profileBorder, backgroundColor: 'white', color: topBarColor }}
+          style={{ 
+            borderColor: profileBorder, 
+            backgroundColor: 'white', 
+            color: topBarColor 
+          }}
         >
           {displayName}
         </button>
@@ -351,14 +357,30 @@ const CoParentingApp = () => {
 
       <div className="flex gap-1 p-2 border-b overflow-x-auto">
         {!(currentUser === 'child1' || currentUser === 'child2') && (
-          <button onClick={() => setCurrentView('daily')} className={`px-3 py-1 text-xs rounded ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+          <button 
+            onClick={() => setCurrentView('daily')} 
+            className={`px-3 py-1 text-xs rounded ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+          >
             <Calendar size={14} /> Día
           </button>
         )}
-        <button onClick={() => setCurrentView('week')} className={`px-3 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Semana</button>
-        <button onClick={() => setCurrentView('month')} className={`px-3 py-1 text-xs rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Mes</button>
+        <button 
+          onClick={() => setCurrentView('week')} 
+          className={`px-3 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+        >
+          Semana
+        </button>
+        <button 
+          onClick={() => setCurrentView('month')} 
+          className={`px-3 py-1 text-xs rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+        >
+          Mes
+        </button>
         {!(currentUser === 'child1' || currentUser === 'child2') && (
-          <button onClick={() => setCurrentView('stats')} className={`px-3 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+          <button 
+            onClick={() => setCurrentView('stats')} 
+            className={`px-3 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+          >
             <BarChart3 size={14} /> Estadísticas
           </button>
         )}
