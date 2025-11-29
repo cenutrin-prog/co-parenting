@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Calendar, Users, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import SetupScreen from './SetupScreen';
 
@@ -13,14 +13,14 @@ const CoParentingApp = () => {
   const [children, setChildren] = useState(savedChildren ? JSON.parse(savedChildren) : { child1: '', child2: '' });
 
   // colores y bordes
-  const [colors] = useState({ parent1: '#86efac', parent2: '#fde047', child1: '#60a5fa', child2: '#f9a8d4', other: '#10B981' });
-  const [borderColors] = useState({ parent1: '#065f46', parent2: '#713f12', child1: '#1e3a8a', child2: '#831843', other: '#065f46' });
+  const colors = { parent1: '#86efac', parent2: '#fde047', child1: '#60a5fa', child2: '#f9a8d4', other: '#10B981' };
+  const borderColors = { parent1: '#065f46', parent2: '#713f12', child1: '#1e3a8a', child2: '#831843', other: '#065f46' };
 
   // estado principal
-  const [currentUser, setCurrentUser] = useState(null); // 'parent1'|'parent2'|'child1'|'child2'
-  const [schedule, setSchedule] = useState({}); // keys: YYYY-MM-DD_child_period -> 'parent1'|'parent2'|'other'
-  const [notes, setNotes] = useState({});    // keys: YYYY-MM-DD_child_period -> text
-  const [currentView, setCurrentView] = useState('week'); // 'daily'|'week'|'month'|'stats'
+  const [currentUser, setCurrentUser] = useState(null);
+  const [schedule, setSchedule] = useState({});
+  const [notes, setNotes] = useState({});
+  const [currentView, setCurrentView] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [popupObs, setPopupObs] = useState(null);
 
@@ -38,14 +38,17 @@ const CoParentingApp = () => {
   };
 
   // --- utilidades de fecha y keys estables ---
-  const formatDate = (d) => {
+  const formatDate = useCallback((d) => {
     if (!d) return '';
     const date = new Date(d);
     return date.toISOString().split('T')[0];
-  };
-  const getScheduleKey = (date, child, period) => `${formatDate(date)}_${child}_${period}`;
+  }, []);
 
-  const getWeekDates = (date) => {
+  const getScheduleKey = useCallback((date, child, period) => 
+    `${formatDate(date)}_${child}_${period}`, [formatDate]
+  );
+
+  const getWeekDates = useCallback((date) => {
     const curr = new Date(date);
     const day = curr.getDay();
     const diff = (day === 0 ? -6 : 1 - day);
@@ -56,9 +59,9 @@ const CoParentingApp = () => {
       d.setDate(monday.getDate() + i);
       return d;
     });
-  };
+  }, []);
 
-  const getMonthDates = (date) => {
+  const getMonthDates = useCallback((date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
     const firstDay = new Date(year, month, 1);
@@ -68,21 +71,80 @@ const CoParentingApp = () => {
     for (let i = 0; i < firstWeekDay; i++) dates.push(null);
     for (let i = 1; i <= lastDay.getDate(); i++) dates.push(new Date(year, month, i));
     return dates;
-  };
+  }, []);
 
   const addDays = (d, days) => {
     const nd = new Date(d);
     nd.setDate(nd.getDate() + days);
     return nd;
   };
+
   const addMonths = (d, months) => {
     const nd = new Date(d);
     nd.setMonth(nd.getMonth() + months);
     return nd;
   };
 
+  // Handlers memorizados para evitar recreación
+  const handleNoteChange = useCallback((key, value) => {
+    setNotes(prev => {
+      if (prev[key] === value) return prev; // evitar actualización innecesaria
+      return { ...prev, [key]: value };
+    });
+  }, []);
+
+  const handleScheduleChange = useCallback((key, value) => {
+    setSchedule(prev => {
+      if (prev[key] === value) return prev;
+      return { ...prev, [key]: value };
+    });
+  }, []);
+
+  // Componente individual de celda memoizado
+  const DayPeriodCell = React.memo(({ scheduleKey, child, isDisabled }) => {
+    const childName = children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2');
+    const scheduleValue = schedule[scheduleKey] || '';
+    const noteValue = notes[scheduleKey] || '';
+
+    return (
+      <div className="border rounded p-1">
+        <div className="text-xs font-medium mb-1">{childName}</div>
+
+        <select
+          value={scheduleValue}
+          onChange={(e) => handleScheduleChange(scheduleKey, e.target.value)}
+          disabled={isDisabled}
+          className="w-full text-xs p-1 border rounded"
+          style={{ backgroundColor: scheduleValue ? colors[scheduleValue] + '40' : 'white' }}
+        >
+          <option value="">Seleccionar</option>
+          <option value="parent1">{parents.parent1 || 'Papá'}</option>
+          <option value="parent2">{parents.parent2 || 'Mamá'}</option>
+          {parents.other && <option value="other">{parents.other}</option>}
+        </select>
+
+        <textarea
+          key={scheduleKey}
+          placeholder="Observaciones..."
+          defaultValue={noteValue}
+          onBlur={(e) => handleNoteChange(scheduleKey, e.target.value)}
+          onChange={(e) => {
+            // Actualizar inmediatamente en memoria sin causar re-render
+            notes[scheduleKey] = e.target.value;
+          }}
+          disabled={isDisabled}
+          className="w-full text-xs p-1 border rounded mt-1"
+          style={{ minHeight: 44, resize: 'vertical' }}
+        />
+      </div>
+    );
+  });
+
   // ---------- VISTAS ----------
   const DailyView = () => {
+    const isChildUser = currentUser === 'child1' || currentUser === 'child2';
+    const childrenToShow = isChildUser ? [currentUser] : ['child1', 'child2'];
+
     return (
       <div className="p-2" style={{ fontSize: 12 }}>
         {periods.map((period) => (
@@ -90,46 +152,15 @@ const CoParentingApp = () => {
             <div className="text-xs font-bold mb-1 uppercase">{period}</div>
 
             <div className="grid grid-cols-2 gap-2">
-              {['child1', 'child2'].map((child) => {
+              {childrenToShow.map((child) => {
                 const sk = getScheduleKey(currentDate, child, period);
-                const shouldShow = !(
-                  (currentUser === 'child1' && child !== 'child1') || 
-                  (currentUser === 'child2' && child !== 'child2')
-                );
-                
-                if (!shouldShow) return null;
-
                 return (
-                  <div key={sk} className="border rounded p-1">
-                    <div className="text-xs font-medium mb-1">
-                      {children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2')}
-                    </div>
-
-                    <select
-                      value={schedule[sk] || ''}
-                      onChange={(e) => setSchedule(prev => ({ ...prev, [sk]: e.target.value }))}
-                      disabled={currentUser === 'child1' || currentUser === 'child2'}
-                      className="w-full text-xs p-1 border rounded"
-                      style={{ backgroundColor: schedule[sk] ? colors[schedule[sk]] + '40' : 'white' }}
-                    >
-                      <option value="">Seleccionar</option>
-                      <option value="parent1">{parents.parent1 || 'Papá'}</option>
-                      <option value="parent2">{parents.parent2 || 'Mamá'}</option>
-                      {parents.other && <option value="other">{parents.other}</option>}
-                    </select>
-
-                    <textarea
-                      placeholder="Observaciones..."
-                      value={notes[sk] || ''}
-                      onChange={(e) => {
-                        const newValue = e.target.value;
-                        setNotes(prev => ({ ...prev, [sk]: newValue }));
-                      }}
-                      disabled={currentUser === 'child1' || currentUser === 'child2'}
-                      className="w-full text-xs p-1 border rounded mt-1"
-                      style={{ minHeight: 44, resize: 'vertical' }}
-                    />
-                  </div>
+                  <DayPeriodCell
+                    key={sk}
+                    scheduleKey={sk}
+                    child={child}
+                    isDisabled={isChildUser}
+                  />
                 );
               })}
             </div>
@@ -158,7 +189,7 @@ const CoParentingApp = () => {
         </div>
 
         <div className="grid" style={{ gridTemplateColumns: '60px repeat(7, 1fr)', gap: 4 }}>
-          <div /> {/* esquina */}
+          <div />
           {weekDates.map((d, i) => (
             <div key={formatDate(d)} className="text-center font-bold text-[11px]">
               {daysOfWeek[i]} {d.getDate()}
