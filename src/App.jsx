@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, Users, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import SetupScreen from './SetupScreen';
 
@@ -24,6 +24,7 @@ const CoParentingApp = () => {
   const periods = ['Mañana', 'Tarde', 'Noche'];
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
+  // Persistir nombres
   const saveAndContinue = (user) => {
     localStorage.setItem('coparenting_parents', JSON.stringify(parents));
     localStorage.setItem('coparenting_children', JSON.stringify(children));
@@ -33,11 +34,11 @@ const CoParentingApp = () => {
     setCurrentView('week');
   };
 
+  // UTIL
   const formatDate = (d) => {
     if (!d) return '';
     const date = new Date(d);
-    const iso = date.toISOString().split('T')[0];
-    return iso;
+    return date.toISOString().split('T')[0];
   };
   const getScheduleKey = (date, child, period) => `${formatDate(date)}_${child}_${period}`;
 
@@ -66,7 +67,6 @@ const CoParentingApp = () => {
     return dates;
   };
 
-  // helpers para cambiar fecha SIN mutar currentDate
   const addDays = (d, days) => {
     const nd = new Date(d);
     nd.setDate(nd.getDate() + days);
@@ -78,8 +78,34 @@ const CoParentingApp = () => {
     return nd;
   };
 
-  // ---------- VISTAS ----------
+  // Texto de observaciones: componente interno que mantiene estado local para evitar pérdida de foco.
+  const ObsTextarea = ({ value, onChange, disabled }) => {
+    const [local, setLocal] = useState(value || '');
 
+    // Sincroniza si value cambia desde fuera (por ejemplo cargar otro día)
+    useEffect(() => {
+      if (value !== local) setLocal(value || '');
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [value]);
+
+    return (
+      <textarea
+        value={local}
+        onChange={(e) => {
+          const nv = e.target.value;
+          setLocal(nv);
+          // Llamada al padre *inmediata* para que otras vistas reflejen el cambio;
+          // local state evita pérdida de foco aunque el padre re-renderice.
+          onChange(nv);
+        }}
+        disabled={disabled}
+        className="w-full text-xs p-1 border rounded mt-1"
+        style={{ minHeight: 44, resize: 'vertical' }}
+      />
+    );
+  };
+
+  // ---------- VISTAS ----------
   const DailyView = () => {
     return (
       <div className="p-2" style={{ fontSize: 12 }}>
@@ -107,13 +133,10 @@ const CoParentingApp = () => {
                       {parents.other && <option value="other">{parents.other}</option>}
                     </select>
 
-                    {/* NO usar `key` en el textarea: evita remounts que hacen perder el foco */}
-                    <textarea
+                    <ObsTextarea
                       value={notes[key] || ''}
-                      onChange={(e) => setNotes(prev => ({ ...prev, [key]: e.target.value }))}
+                      onChange={(nv) => setNotes(prev => ({ ...prev, [key]: nv }))}
                       disabled={currentUser === 'child1' || currentUser === 'child2'}
-                      className="w-full text-xs p-1 border rounded mt-1"
-                      style={{ minHeight: 44, resize: 'vertical' }}
                     />
                   </div>
                 );
@@ -142,7 +165,7 @@ const CoParentingApp = () => {
         </div>
 
         <div className="grid" style={{ gridTemplateColumns: '60px repeat(7, 1fr)', gap: 4 }}>
-          <div /> {/* espacio esquina */}
+          <div /> {/* esquina */}
           {weekDates.map((d, i) => (
             <div key={formatDate(d)} className="text-center font-bold text-[11px]">{daysOfWeek[i]} {d.getDate()}</div>
           ))}
@@ -150,6 +173,7 @@ const CoParentingApp = () => {
           {periods.map((period) => (
             <React.Fragment key={period}>
               <div className="font-bold text-[11px]">{period}</div>
+
               {weekDates.map((d) => (
                 <div key={`${formatDate(d)}_${period}`} className="border rounded p-1 min-h-[56px]" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {childrenToShow.map((child) => {
@@ -161,7 +185,7 @@ const CoParentingApp = () => {
                       // padre/madre: mostrar nombre del hijo si ese hijo está con este padre en esa franja
                       const isWithThisParent = assigned === currentUser;
                       return (
-                        <React.Fragment key={key}>
+                        <React.Fragment key={key + '_frag'}>
                           <div className="text-[10px] text-center rounded" style={{ backgroundColor: isWithThisParent ? colors[child] : '#f3f4f6' }}>
                             {isWithThisParent ? (children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2')) : '-'}
                           </div>
@@ -169,9 +193,9 @@ const CoParentingApp = () => {
                         </React.Fragment>
                       );
                     } else {
-                      // perfil hijo: mostrar Papá/Mamá en color del padre y observaciones
+                      // perfil hijo: Papá/Mamá y observaciones
                       return (
-                        <React.Fragment key={key}>
+                        <React.Fragment key={key + '_frag2'}>
                           <div className="text-[10px] text-center rounded" style={{ backgroundColor: assigned ? colors[assigned] : '#f3f4f6' }}>
                             {assigned ? (assigned === 'parent1' ? 'Papá' : assigned === 'parent2' ? 'Mamá' : parents.other || 'Otro') : '-'}
                           </div>
@@ -224,7 +248,7 @@ const CoParentingApp = () => {
                           </div>
                         );
                       } else {
-                        // perfil hijo: mostrar Papá/Mamá o '-'
+                        // perfil hijo
                         const assignedParent = schedule[getScheduleKey(date, currentUser, period)];
                         const obsText = notes[getScheduleKey(date, currentUser, period)];
                         return (
