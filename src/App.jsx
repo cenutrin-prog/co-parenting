@@ -88,7 +88,7 @@ const CoParentingApp = () => {
   // Handlers memorizados para evitar recreación
   const handleNoteChange = useCallback((key, value) => {
     setNotes(prev => {
-      if (prev[key] === value) return prev; // evitar actualización innecesaria
+      if (prev[key] === value) return prev;
       return { ...prev, [key]: value };
     });
   }, []);
@@ -129,7 +129,6 @@ const CoParentingApp = () => {
           defaultValue={noteValue}
           onBlur={(e) => handleNoteChange(scheduleKey, e.target.value)}
           onChange={(e) => {
-            // Actualizar inmediatamente en memoria sin causar re-render
             notes[scheduleKey] = e.target.value;
           }}
           disabled={isDisabled}
@@ -170,24 +169,22 @@ const CoParentingApp = () => {
     );
   };
 
-  const WeekView = () => {
+  // Componente de calendario semanal individual
+  const WeekCalendar = ({ childFilter = null, showChildName = false }) => {
     const weekDates = getWeekDates(currentDate);
-    const firstMonth = weekDates[0].toLocaleDateString('es-ES', { month: 'long' });
-    const lastMonth = weekDates[6].toLocaleDateString('es-ES', { month: 'long' });
+    const firstMonth = weekDates[0].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    const lastMonth = weekDates[6].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
     const monthLabel = firstMonth === lastMonth ? firstMonth : `${firstMonth} / ${lastMonth}`;
+    
+    const childName = childFilter ? (children[childFilter] || (childFilter === 'child1' ? 'Hijo 1' : 'Hijo 2')).toUpperCase() : '';
 
     return (
-      <div className="p-1" style={{ fontSize: 11 }}>
-        <div className="flex items-center justify-between mb-1">
-          <button onClick={() => setCurrentDate(d => addDays(d, -7))} className="p-1">
-            <ChevronLeft size={16} />
-          </button>
-          <div className="text-xs font-medium">{monthLabel}</div>
-          <button onClick={() => setCurrentDate(d => addDays(d, 7))} className="p-1">
-            <ChevronRight size={16} />
-          </button>
-        </div>
-
+      <div className="mb-4">
+        {showChildName && (
+          <div className="text-xs font-bold text-center mb-1">{childName}</div>
+        )}
+        <div className="text-xs font-medium text-center mb-1">{monthLabel}</div>
+        
         <div className="grid" style={{ gridTemplateColumns: '60px repeat(7, 1fr)', gap: 4 }}>
           <div />
           {weekDates.map((d, i) => (
@@ -202,38 +199,39 @@ const CoParentingApp = () => {
               {weekDates.map((d) => (
                 <div 
                   key={`${formatDate(d)}_${period}`} 
-                  className="border rounded p-1 min-h-[56px]" 
-                  style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+                  className="border rounded p-1 min-h-[40px] flex items-center justify-center"
                 >
-                  {['child1', 'child2'].map((child) => {
+                  {(childFilter ? [childFilter] : ['child1', 'child2']).map((child) => {
                     const sk = getScheduleKey(d, child, period);
                     const assigned = schedule[sk];
                     const obs = notes[sk] || '';
                     
                     if (currentUser === 'parent1' || currentUser === 'parent2') {
                       const isWithThisParent = assigned === currentUser;
+                      const displayName = isWithThisParent ? (children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2')) : '-';
                       return (
-                        <React.Fragment key={sk}>
-                          <div 
-                            className="text-[10px] text-center rounded" 
-                            style={{ backgroundColor: isWithThisParent ? colors[child] : '#f3f4f6' }}
-                          >
-                            {isWithThisParent ? (children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2')) : '-'}
-                          </div>
-                          <div className="text-[8px] text-center">{obs || '-'}</div>
-                        </React.Fragment>
+                        <div 
+                          key={sk}
+                          onClick={() => obs && setPopupObs(obs)}
+                          className="text-[10px] text-center rounded px-1 cursor-pointer"
+                          style={{ backgroundColor: isWithThisParent ? colors[child] : '#f3f4f6' }}
+                        >
+                          {displayName}
+                          {obs && <span className="ml-1">*</span>}
+                        </div>
                       );
                     } else {
+                      const displayName = assigned ? (assigned === 'parent1' ? 'Papá' : assigned === 'parent2' ? 'Mamá' : parents.other || 'Otro') : '-';
                       return (
-                        <React.Fragment key={sk}>
-                          <div 
-                            className="text-[10px] text-center rounded" 
-                            style={{ backgroundColor: assigned ? colors[assigned] : '#f3f4f6' }}
-                          >
-                            {assigned ? (assigned === 'parent1' ? 'Papá' : assigned === 'parent2' ? 'Mamá' : parents.other || 'Otro') : '-'}
-                          </div>
-                          <div className="text-[8px] text-center">{obs || ''}</div>
-                        </React.Fragment>
+                        <div 
+                          key={sk}
+                          onClick={() => obs && setPopupObs(obs)}
+                          className="text-[10px] text-center rounded px-1 cursor-pointer"
+                          style={{ backgroundColor: assigned ? colors[assigned] : '#f3f4f6' }}
+                        >
+                          {displayName}
+                          {obs && <span className="ml-1">*</span>}
+                        </div>
                       );
                     }
                   })}
@@ -242,6 +240,44 @@ const CoParentingApp = () => {
             </React.Fragment>
           ))}
         </div>
+      </div>
+    );
+  };
+
+  const WeekView = () => {
+    // Si es perfil de hijo, mostrar ambos calendarios
+    if (currentUser === 'child1' || currentUser === 'child2') {
+      return (
+        <div className="p-1" style={{ fontSize: 11 }}>
+          <div className="flex items-center justify-between mb-2">
+            <button onClick={() => setCurrentDate(d => addDays(d, -7))} className="p-1">
+              <ChevronLeft size={16} />
+            </button>
+            <div className="text-xs font-medium">Semana</div>
+            <button onClick={() => setCurrentDate(d => addDays(d, 7))} className="p-1">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+
+          <WeekCalendar childFilter="child1" showChildName={true} />
+          <WeekCalendar childFilter="child2" showChildName={true} />
+        </div>
+      );
+    }
+
+    // Para padres, mostrar calendario normal
+    return (
+      <div className="p-1" style={{ fontSize: 11 }}>
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => setCurrentDate(d => addDays(d, -7))} className="p-1">
+            <ChevronLeft size={16} />
+          </button>
+          <button onClick={() => setCurrentDate(d => addDays(d, 7))} className="p-1">
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        <WeekCalendar />
       </div>
     );
   };
@@ -273,36 +309,40 @@ const CoParentingApp = () => {
               <div key={dateKey} className="border rounded p-1 min-h-[72px] flex flex-col justify-between">
                 {date ? (
                   <>
+                    <div className="text-[9px] font-bold mb-1">{date.getDate()}</div>
                     {periods.map((period) => {
                       if (currentUser === 'parent1' || currentUser === 'parent2') {
                         const childAssigned1 = schedule[getScheduleKey(date, 'child1', period)] === currentUser ? 'child1' : null;
                         const childAssigned2 = schedule[getScheduleKey(date, 'child2', period)] === currentUser ? 'child2' : null;
                         const nameToShow = childAssigned1 ? (children.child1 || 'Hijo 1') : (childAssigned2 ? (children.child2 || 'Hijo 2') : '-');
-                        const hasObs = !!(notes[getScheduleKey(date, 'child1', period)] || notes[getScheduleKey(date, 'child2', period)]);
+                        const childKey = childAssigned1 || childAssigned2;
+                        const obs = childKey ? notes[getScheduleKey(date, childKey, period)] : '';
                         const bg = nameToShow === (children.child1 || 'Hijo 1') ? colors.child1 : nameToShow === (children.child2 || 'Hijo 2') ? colors.child2 : '#f3f4f6';
                         return (
                           <div 
                             key={`${dateKey}_${period}`} 
-                            className="text-[9px] text-center border-b py-0.5" 
+                            onClick={() => obs && setPopupObs(obs)}
+                            className="text-[9px] text-center border-b py-0.5 cursor-pointer" 
                             style={{ backgroundColor: bg }}
                           >
                             <span>{nameToShow}</span>
-                            {hasObs ? <span style={{ marginLeft: 4 }}>*</span> : null}
+                            {obs && <span className="ml-1">*</span>}
                           </div>
                         );
                       } else {
                         const assignedParent = schedule[getScheduleKey(date, currentUser, period)];
-                        const obsText = notes[getScheduleKey(date, currentUser, period)];
+                        const obs = notes[getScheduleKey(date, currentUser, period)];
                         return (
                           <div 
                             key={`${dateKey}_${period}`} 
-                            className="text-[9px] text-center border-b py-0.5" 
+                            onClick={() => obs && setPopupObs(obs)}
+                            className="text-[9px] text-center border-b py-0.5 cursor-pointer" 
                             style={{ backgroundColor: assignedParent ? colors[assignedParent] : '#f3f4f6' }}
                           >
                             <span>
                               {assignedParent ? (assignedParent === 'parent1' ? 'Papá' : assignedParent === 'parent2' ? 'Mamá' : parents.other || 'Otro') : '-'}
                             </span>
-                            {obsText ? <span style={{ marginLeft: 4 }}>*</span> : null}
+                            {obs && <span className="ml-1">*</span>}
                           </div>
                         );
                       }
@@ -315,28 +355,6 @@ const CoParentingApp = () => {
             );
           })}
         </div>
-
-        {popupObs && (
-          <div 
-            className="fixed inset-0 bg-black/40 flex items-center justify-center" 
-            onClick={() => setPopupObs(null)}
-          >
-            <div 
-              className="bg-white p-3 rounded max-w-md" 
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="text-sm">{popupObs}</div>
-              <div className="mt-2 text-right">
-                <button 
-                  onClick={() => setPopupObs(null)} 
-                  className="px-3 py-1 bg-blue-600 text-white rounded text-xs"
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   };
@@ -422,6 +440,30 @@ const CoParentingApp = () => {
         {currentView === 'week' && <WeekView />}
         {currentView === 'month' && <MonthView />}
       </div>
+
+      {/* Popup de observaciones */}
+      {popupObs && (
+        <div 
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" 
+          onClick={() => setPopupObs(null)}
+        >
+          <div 
+            className="bg-white p-4 rounded-lg shadow-lg max-w-sm mx-4" 
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="text-xs font-bold mb-2">Observaciones:</div>
+            <div className="text-sm mb-3">{popupObs}</div>
+            <div className="text-right">
+              <button 
+                onClick={() => setPopupObs(null)} 
+                className="px-3 py-1 bg-blue-600 text-white rounded text-xs"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
