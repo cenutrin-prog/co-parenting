@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient.js';
 
 const SetupScreen = ({
@@ -11,6 +11,15 @@ const SetupScreen = ({
   setShowNameEntry
 }) => {
 
+  // Inicializa valores si vienen vacíos
+  useEffect(() => {
+    if (!parents.parent1) setParents(prev => ({ ...prev, parent1: '' }));
+    if (!parents.parent2) setParents(prev => ({ ...prev, parent2: '' }));
+    if (!parents.other) setParents(prev => ({ ...prev, other: '' }));
+    if (!children.child1) setChildren(prev => ({ ...prev, child1: '' }));
+    if (!children.child2) setChildren(prev => ({ ...prev, child2: '' }));
+  }, []);
+
   const handleParentChange = (field, value) => {
     setParents(prev => ({ ...prev, [field]: value }));
   };
@@ -19,7 +28,6 @@ const SetupScreen = ({
     setChildren(prev => ({ ...prev, [field]: value }));
   };
 
-  // FORMULARIO INICIAL (obligatorio para que la app funcione)
   if (showNameEntry) {
     return (
       <div className="p-4 max-w-md mx-auto bg-white min-h-screen flex flex-col justify-center">
@@ -73,6 +81,10 @@ const SetupScreen = ({
                 alert("Completa todos los campos obligatorios.");
                 return;
               }
+
+              // Guardado local opcional (para evitar errores si App.jsx no pasa todo perfecto)
+              localStorage.setItem('coparenting_parents', JSON.stringify({ parents, children }));
+
               saveAndContinue("parent1");
             }}
             className="w-full text-white py-3 rounded-lg font-medium text-lg bg-blue-500"
@@ -85,7 +97,6 @@ const SetupScreen = ({
     );
   }
 
-  // PANTALLA SECUNDARIA (cuando ya se rellenaron formas)
   return (
     <div className="p-4 max-w-md mx-auto bg-white min-h-screen flex flex-col justify-center">
       <h1 className="text-2xl font-bold text-center mb-8 text-blue-600">CoParenting</h1>
