@@ -15,7 +15,7 @@ const CoParentingApp = () => {
 
   // Colores nuevos - vivos
   const colors = { 
-    parent1: '#FF8C42',  // Naranja
+    parent1: '#FF6B35',  // Naranja más brillante e intenso
     parent2: '#86efac',  // Verde
     child1: '#FDD835',   // Amarillo
     child2: '#00BCD4',   // Cian
@@ -24,7 +24,7 @@ const CoParentingApp = () => {
   
   // Bordes más oscuros para cada color
   const borderColors = { 
-    parent1: '#D16100',  // Naranja oscuro
+    parent1: '#CC4400',  // Naranja oscuro más intenso
     parent2: '#065f46',  // Verde oscuro
     child1: '#C6A700',   // Amarillo oscuro
     child2: '#00838F',   // Cian oscuro
@@ -544,7 +544,7 @@ const CoParentingApp = () => {
                         );
                       }
                       
-                      // Para hijos: mostrar nombre completo del padre/madre
+                      // Para hijos: mostrar "Papá", "Mamá" o nombre del otro cuidador
                       if (isChildUser) {
                         const childKey = getScheduleKey(date, currentUser, period);
                         const assignedParent = schedule[childKey];
@@ -554,10 +554,10 @@ const CoParentingApp = () => {
                         let bgColor = '#f3f4f6';
                         
                         if (assignedParent === 'parent1') {
-                          displayText = parents.parent1 || 'Papá';
+                          displayText = 'Papá';
                           bgColor = colors.parent1;
                         } else if (assignedParent === 'parent2') {
-                          displayText = parents.parent2 || 'Mamá';
+                          displayText = 'Mamá';
                           bgColor = colors.parent2;
                         } else if (assignedParent === 'other') {
                           displayText = parents.other || 'Otro';
