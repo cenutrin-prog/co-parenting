@@ -1,24 +1,23 @@
 import React, { useState, useCallback } from 'react';
 import { Calendar, Users, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import SetupScreen from './SetupScreen';
-import { supabase } from './supabaseClient.js'; // uso único del cliente Supabase
+import { supabase } from './supabaseClient.js';
 
-const savedParents = typeof window !== 'undefined' ? localStorage.getItem('coparenting_parents') : null;
-const savedChildren = typeof window !== 'undefined' ? localStorage.getItem('coparenting_children') : null;
+const CoParentingApp = () => {
+  // Estado inicial desde localStorage
+  const savedParents = typeof window !== 'undefined' ? localStorage.getItem('coparenting_parents') : null;
+  const savedChildren = typeof window !== 'undefined' ? localStorage.getItem('coparenting_children') : null;
 
-const [parents, setParents] = useState(savedParents ? JSON.parse(savedParents) : { parent1: '', parent2: '' });
-const [children, setChildren] = useState(savedChildren ? JSON.parse(savedChildren) : { child1: '', child2: '' });
+  const [parents, setParents] = useState(savedParents ? JSON.parse(savedParents) : { parent1: '', parent2: '' });
+  const [children, setChildren] = useState(savedChildren ? JSON.parse(savedChildren) : { child1: '', child2: '' });
+  const [step, setStep] = useState(savedParents && savedChildren ? 'main' : 'setup');
+  const [currentUser, setCurrentUser] = useState(null);
 
-const [step, setStep] = useState(savedParents && savedChildren ? 'main' : 'setup');
-const [currentUser, setCurrentUser] = useState(null);
-
-
-  // colores y bordes
+  // Colores y bordes
   const colors = { parent1: '#86efac', parent2: '#fde047', child1: '#60a5fa', child2: '#f9a8d4', other: '#10B981' };
   const borderColors = { parent1: '#065f46', parent2: '#713f12', child1: '#1e3a8a', child2: '#831843', other: '#065f46' };
 
-  // estado principal
-  const [currentUser, setCurrentUser] = useState(null);
+  // Estado principal
   const [schedule, setSchedule] = useState({});
   const [notes, setNotes] = useState({});
   const [currentView, setCurrentView] = useState('week');
@@ -33,12 +32,11 @@ const [currentUser, setCurrentUser] = useState(null);
     localStorage.setItem('coparenting_parents', JSON.stringify(parents));
     localStorage.setItem('coparenting_children', JSON.stringify(children));
     setCurrentUser(user);
-    setShowNameEntry(false);
     setStep('main');
     setCurrentView('week');
   };
 
-  // --- utilidades de fecha y keys estables ---
+  // Utilidades de fecha y keys estables
   const formatDate = useCallback((d) => {
     if (!d) return '';
     const date = new Date(d);
@@ -86,7 +84,7 @@ const [currentUser, setCurrentUser] = useState(null);
     return nd;
   };
 
-  // Handlers memorizados para evitar recreación
+  // Handlers memorizados
   const handleNoteChange = useCallback((key, value) => {
     setNotes(prev => {
       if (prev[key] === value) return prev;
@@ -101,12 +99,10 @@ const [currentUser, setCurrentUser] = useState(null);
     });
   }, []);
 
-  // Guardar schedule en la tabla 'asignaciones'
-  // Para cada celda con valor (parent key: 'parent1'|'parent2'|'other'), busca padre_id e hija_id por nombre
-  // y crea los inserts { padre_id, hija_id, fecha, periodo }.
+  // Guardar schedule en Supabase
   const saveScheduleInSupabase = async () => {
     try {
-      const keys = Object.keys(schedule).filter(k => schedule[k]); // solo celdas asignadas
+      const keys = Object.keys(schedule).filter(k => schedule[k]);
       if (keys.length === 0) {
         alert('No hay asignaciones para guardar.');
         return;
@@ -115,22 +111,17 @@ const [currentUser, setCurrentUser] = useState(null);
       const inserts = [];
 
       for (const k of keys) {
-        // k: "YYYY-MM-DD_childX_Periodo"
         const parts = k.split('_');
         if (parts.length < 3) continue;
         const fecha = parts[0];
-        const childKey = parts[1]; // child1 | child2
-        const periodo = parts.slice(2).join('_'); // por si tiene guiones
-        const parentKey = schedule[k]; // 'parent1'|'parent2'|'other'
-        const padreNombre = parents[parentKey]; // nombre real
+        const childKey = parts[1];
+        const periodo = parts.slice(2).join('_');
+        const parentKey = schedule[k];
+        const padreNombre = parents[parentKey];
         const hijaNombre = children[childKey];
 
-        if (!padreNombre || !hijaNombre) {
-          // No tenemos nombres, saltar
-          continue;
-        }
+        if (!padreNombre || !hijaNombre) continue;
 
-        // buscar ids en la base de datos
         const { data: padreData, error: padreErr } = await supabase
           .from('padres')
           .select('id')
@@ -138,11 +129,7 @@ const [currentUser, setCurrentUser] = useState(null);
           .limit(1)
           .maybeSingle();
 
-        if (padreErr) {
-          console.error('Error buscando padre:', padreErr);
-          continue;
-        }
-        if (!padreData) {
+        if (padreErr || !padreData) {
           console.warn('Padre no encontrado:', padreNombre);
           continue;
         }
@@ -154,11 +141,7 @@ const [currentUser, setCurrentUser] = useState(null);
           .limit(1)
           .maybeSingle();
 
-        if (hijaErr) {
-          console.error('Error buscando hija:', hijaErr);
-          continue;
-        }
-        if (!hijaData) {
+        if (hijaErr || !hijaData) {
           console.warn('Hija no encontrada:', hijaNombre);
           continue;
         }
@@ -190,7 +173,7 @@ const [currentUser, setCurrentUser] = useState(null);
     }
   };
 
-  // Componente individual de celda memoizado
+  // Componente de celda memoizado
   const DayPeriodCell = React.memo(({ scheduleKey, child, isDisabled }) => {
     const childName = children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2');
     const scheduleValue = schedule[scheduleKey] || '';
@@ -229,7 +212,7 @@ const [currentUser, setCurrentUser] = useState(null);
     );
   });
 
-  // ---------- VISTAS ----------
+  // VISTAS
   const DailyView = () => {
     const isChildUser = currentUser === 'child1' || currentUser === 'child2';
     const childrenToShow = isChildUser ? [currentUser] : ['child1', 'child2'];
@@ -509,20 +492,19 @@ const [currentUser, setCurrentUser] = useState(null);
     );
   };
 
-  // ---------- RENDER PRINCIPAL ----------
-if (step === 'setup') {
-  return (
-    <SetupScreen
-      parents={parents}
-      setParents={setParents}
-      children={children}
-      setChildren={setChildren}
-      setCurrentUser={setCurrentUser}
-      setStep={setStep}
-    />
-  );
-}
-
+  // RENDER PRINCIPAL
+  if (step === 'setup') {
+    return (
+      <SetupScreen
+        parents={parents}
+        setParents={setParents}
+        children={children}
+        setChildren={setChildren}
+        setCurrentUser={setCurrentUser}
+        setStep={setStep}
+      />
+    );
+  }
 
   const topBarColor = currentUser ? colors[currentUser] : '#3b82f6';
   const profileBorder = currentUser ? borderColors[currentUser] : '#ffffff';
@@ -542,7 +524,7 @@ if (step === 'setup') {
           <span className="font-bold text-sm">CoParenting</span>
         </div>
         <button
-          onClick={() => { setStep('setup'); setShowNameEntry(false); }}
+          onClick={() => { setStep('setup'); }}
           className="text-xs px-2 py-1 rounded border-2 font-medium"
           style={{ 
             borderColor: profileBorder, 
@@ -599,7 +581,6 @@ if (step === 'setup') {
         {currentView === 'month' && <MonthView />}
       </div>
 
-      {/* Popup de observaciones */}
       {popupObs && (
         <div 
           className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" 
