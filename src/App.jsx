@@ -13,9 +13,23 @@ const CoParentingApp = () => {
   const [step, setStep] = useState(savedParents && savedChildren ? 'main' : 'setup');
   const [currentUser, setCurrentUser] = useState(null);
 
-  // Colores y bordes
-  const colors = { parent1: '#86efac', parent2: '#fde047', child1: '#60a5fa', child2: '#f9a8d4', other: '#10B981' };
-  const borderColors = { parent1: '#065f46', parent2: '#713f12', child1: '#1e3a8a', child2: '#831843', other: '#065f46' };
+  // Colores nuevos - vivos
+  const colors = { 
+    parent1: '#FF8C42',  // Naranja
+    parent2: '#86efac',  // Verde
+    child1: '#FDD835',   // Amarillo
+    child2: '#00BCD4',   // Cian
+    other: '#FF69B4'     // Rosa
+  };
+  
+  // Bordes más oscuros para cada color
+  const borderColors = { 
+    parent1: '#D16100',  // Naranja oscuro
+    parent2: '#065f46',  // Verde oscuro
+    child1: '#C6A700',   // Amarillo oscuro
+    child2: '#00838F',   // Cian oscuro
+    other: '#C2185B'     // Rosa oscuro
+  };
 
   // Estado principal
   const [schedule, setSchedule] = useState({});
@@ -181,7 +195,9 @@ const CoParentingApp = () => {
 
     return (
       <div className="border rounded p-1">
-        <div className="text-[10px] font-medium mb-1">{childName}</div>
+        <div className="text-[10px] font-medium mb-1" style={{ color: colors[child] }}>
+          {childName}
+        </div>
 
         <select
           value={scheduleValue}
@@ -259,7 +275,9 @@ const CoParentingApp = () => {
     return (
       <div className="mb-1">
         {showChildName && (
-          <div className="text-[9px] font-bold text-center mb-1">{childName}</div>
+          <div className="text-[9px] font-bold text-center mb-1" style={{ color: colors[childFilter] }}>
+            {childName}
+          </div>
         )}
         <div className="text-[9px] font-medium text-center mb-1">{monthLabel}</div>
         
@@ -294,7 +312,10 @@ const CoParentingApp = () => {
                             key={sk}
                             onClick={() => obs && setPopupObs(obs)}
                             className="text-[7px] text-center rounded px-0.5 cursor-pointer"
-                            style={{ backgroundColor: isWithThisParent ? colors[child] : '#f3f4f6' }}
+                            style={{ 
+                              backgroundColor: isWithThisParent ? colors[child] : '#f3f4f6',
+                              color: isWithThisParent ? '#000' : '#666'
+                            }}
                           >
                             {displayName}
                             {obs && <span className="ml-0.5">*</span>}
@@ -307,7 +328,10 @@ const CoParentingApp = () => {
                             key={sk}
                             onClick={() => obs && setPopupObs(obs)}
                             className="text-[7px] text-center rounded px-0.5 cursor-pointer"
-                            style={{ backgroundColor: assigned ? colors[assigned] : '#f3f4f6' }}
+                            style={{ 
+                              backgroundColor: assigned ? colors[assigned] : '#f3f4f6',
+                              color: assigned ? '#000' : '#666'
+                            }}
                           >
                             {displayName}
                             {obs && <span className="ml-0.5">*</span>}
@@ -364,16 +388,24 @@ const CoParentingApp = () => {
 
                     return (
                       <div key={caregiver.key} className="flex items-center gap-0.5 mb-0.5 text-[7px]">
-                        <span className="font-bold">{caregiver.initial}</span>
+                        <span className="font-bold" style={{ color: colors[caregiver.key] }}>
+                          {caregiver.initial}
+                        </span>
                         <span 
                           className="px-0.5 rounded"
-                          style={{ backgroundColor: child1Assigned ? colors.child1 : '#f3f4f6' }}
+                          style={{ 
+                            backgroundColor: child1Assigned ? colors.child1 : '#f3f4f6',
+                            color: '#000'
+                          }}
                         >
                           {child1Initial}
                         </span>
                         <span 
                           className="px-0.5 rounded"
-                          style={{ backgroundColor: child2Assigned ? colors.child2 : '#f3f4f6' }}
+                          style={{ 
+                            backgroundColor: child2Assigned ? colors.child2 : '#f3f4f6',
+                            color: '#000'
+                          }}
                         >
                           {child2Initial}
                         </span>
@@ -473,7 +505,10 @@ const CoParentingApp = () => {
                           key={`${dateKey}_${period}`}
                           onClick={() => obs && setPopupObs(obs)}
                           className="text-[7px] text-center border-b py-0.5 cursor-pointer"
-                          style={{ backgroundColor: assignedParent ? colors[assignedParent] : '#f3f4f6' }}
+                          style={{ 
+                            backgroundColor: assignedParent ? colors[assignedParent] : '#f3f4f6',
+                            color: '#000'
+                          }}
                         >
                           {assignedParent ? (assignedParent === 'parent1' ? 'Papá' : 'Mamá') : '-'}
                           {obs && <span className="ml-0.5">*</span>}
