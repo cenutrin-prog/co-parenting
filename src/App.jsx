@@ -3,20 +3,15 @@ import { Calendar, Users, BarChart3, ChevronLeft, ChevronRight } from 'lucide-re
 import SetupScreen from './SetupScreen';
 import { supabase } from './supabaseClient.js'; // uso único del cliente Supabase
 
-const CoParentingApp = () => {
-  // --- Persistencia nombres ---
-  const savedParents = typeof window !== 'undefined' ? localStorage.getItem('coparenting_parents') : null;
-  const savedChildren = typeof window !== 'undefined' ? localStorage.getItem('coparenting_children') : null;
+const savedParents = typeof window !== 'undefined' ? localStorage.getItem('coparenting_parents') : null;
+const savedChildren = typeof window !== 'undefined' ? localStorage.getItem('coparenting_children') : null;
 
- // Paso 1: comprobar si hay datos guardados
-const hasSavedData = savedParents && savedChildren;
+const [parents, setParents] = useState(savedParents ? JSON.parse(savedParents) : { parent1: '', parent2: '' });
+const [children, setChildren] = useState(savedChildren ? JSON.parse(savedChildren) : { child1: '', child2: '' });
 
-// Paso 2: definir el estado inicial
-const [step, setStep] = useState(hasSavedData ? 'main' : 'setup');
-const [showNameEntry, setShowNameEntry] = useState(!hasSavedData);
+const [step, setStep] = useState(savedParents && savedChildren ? 'main' : 'setup');
+const [currentUser, setCurrentUser] = useState(null);
 
-  const [parents, setParents] = useState(savedParents ? JSON.parse(savedParents) : { parent1: '', parent2: '', other: '' });
-  const [children, setChildren] = useState(savedChildren ? JSON.parse(savedChildren) : { child1: '', child2: '' });
 
   // colores y bordes
   const colors = { parent1: '#86efac', parent2: '#fde047', child1: '#60a5fa', child2: '#f9a8d4', other: '#10B981' };
@@ -515,19 +510,19 @@ const [showNameEntry, setShowNameEntry] = useState(!hasSavedData);
   };
 
   // ---------- RENDER PRINCIPAL ----------
-  if (step === 'setup') {
-    return (
-      <SetupScreen
-        saveAndContinue={saveAndContinue}
-        parents={parents} 
-        setParents={setParents}
-        children={children} 
-        setChildren={setChildren}
-        showNameEntry={showNameEntry} 
-        setShowNameEntry={setShowNameEntry}
-      />
-    );
-  }
+if (step === 'setup') {
+  return (
+    <SetupScreen
+      parents={parents}
+      setParents={setParents}
+      children={children}
+      setChildren={setChildren}
+      setCurrentUser={setCurrentUser}
+      setStep={setStep}
+    />
+  );
+}
+
 
   const topBarColor = currentUser ? colors[currentUser] : '#3b82f6';
   const profileBorder = currentUser ? borderColors[currentUser] : '#ffffff';
