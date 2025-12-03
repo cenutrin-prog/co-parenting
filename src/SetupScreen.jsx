@@ -1,27 +1,54 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { supabase } from './supabaseClient.js';
 
 const SetupScreen = ({ parents, setParents, children, setChildren, saveAndContinue, showNameEntry, setShowNameEntry }) => {
+  const [selectedDay, setSelectedDay] = useState('');
+  const [selectedPeriod, setSelectedPeriod] = useState('Mañana');
+
+  const guardarAsignaciones = async () => {
+    if (!selectedDay || !parents.parent1 || !parents.parent2 || !children.child1 || !children.child2) {
+      alert('Rellena todos los campos antes de guardar.');
+      return;
+    }
+
+    const padre1 = await supabase.from('padres').select('id').eq('nombre', parents.parent1).single();
+    const padre2 = await supabase.from('padres').select('id').eq('nombre', parents.parent2).single();
+    const hija1 = await supabase.from('hijas').select('id').eq('nombre', children.child1).single();
+    const hija2 = await supabase.from('hijas').select('id').eq('nombre', children.child2).single();
+
+    if (!padre1.data || !padre2.data || !hija1.data || !hija2.data) {
+      alert('No se encontró algún padre o hija en la base de datos.');
+      return;
+    }
+
+    const inserts = [
+      { padre_id: padre1.data.id, hija_id: hija1.data.id, fecha: selectedDay, periodo: selectedPeriod },
+      { padre_id: padre1.data.id, hija_id: hija2.data.id, fecha: selectedDay, periodo: selectedPeriod },
+      { padre_id: padre2.data.id, hija_id: hija1.data.id, fecha: selectedDay, periodo: selectedPeriod },
+      { padre_id: padre2.data.id, hija_id: hija2.data.id, fecha: selectedDay, periodo: selectedPeriod },
+    ];
+
+    const { data, error } = await supabase.from('asignaciones').insert(inserts);
+
+    if (error) {
+      alert('Error al guardar: ' + error.message);
+    } else {
+      alert('Asignaciones guardadas correctamente.');
+    }
+  };
+
   if (!showNameEntry && parents.parent1 && parents.parent2 && children.child1 && children.child2) {
     return (
       <div className="p-4 max-w-md mx-auto bg-white min-h-screen flex flex-col justify-center">
         <h1 className="text-2xl font-bold text-center mb-8 text-blue-600">CoParenting</h1>
         <div className="space-y-3">
-          <button onClick={() => saveAndContinue('parent1')} className="w-full text-white py-4 rounded-lg font-medium text-lg" style={{ backgroundColor: '#86efac', color: '#065f46' }}>
-            Continuar como {parents.parent1}
-          </button>
-          <button onClick={() => saveAndContinue('parent2')} className="w-full text-white py-4 rounded-lg font-medium text-lg" style={{ backgroundColor: '#fde047', color: '#713f12' }}>
-            Continuar como {parents.parent2}
-          </button>
-          <button onClick={() => saveAndContinue('child1')} className="w-full text-white py-4 rounded-lg font-medium text-lg" style={{ backgroundColor: '#60a5fa', color: '#1e3a8a' }}>
-            Continuar como {children.child1}
-          </button>
-          <button onClick={() => saveAndContinue('child2')} className="w-full text-white py-4 rounded-lg font-medium text-lg" style={{ backgroundColor: '#f9a8d4', color: '#831843' }}>
-            Continuar como {children.child2}
-          </button>
-        </div>
-        <div className="text-center mt-8">
-          <button onClick={() => setShowNameEntry(true)} className="text-blue-600 underline text-sm">
-            Volver a nombres
+          <input type="date" value={selectedDay} onChange={(e) => setSelectedDay(e.target.value)} className="w-full p-2 border rounded" />
+          <select value={selectedPeriod} onChange={(e) => setSelectedPeriod(e.target.value)} className="w-full p-2 border rounded">
+            <option value="Mañana">Mañana</option>
+            <option value="Tarde">Tarde</option>
+          </select>
+          <button onClick={guardarAsignaciones} className="w-full text-white py-4 rounded-lg font-medium text-lg bg-green-500">
+            Guardar todas las asignaciones
           </button>
         </div>
       </div>
@@ -31,58 +58,6 @@ const SetupScreen = ({ parents, setParents, children, setChildren, saveAndContin
   return (
     <div className="p-4 max-w-md mx-auto bg-white min-h-screen">
       <h1 className="text-2xl font-bold text-center mb-6 text-blue-600">CoParenting</h1>
-      <div className="space-y-4">
-        {[
-          { label: 'Padre', key: 'parent1', bg: '#86efac20', border: 'green-400' },
-          { label: 'Madre', key: 'parent2', bg: '#fde04720', border: 'yellow-400' },
-          { label: 'Otro Cuidador (opcional)', key: 'other', bg: '#10B98120', border: 'green-400' },
-        ].map(({ label, key, bg, border }) => (
-          <div key={key}>
-            <label className="block text-sm font-medium mb-1">{label}</label>
-            <input
-              type="text"
-              value={parents[key]}
-              onChange={(e) => setParents(prev => ({ ...prev, [key]: e.target.value }))}
-              className={`w-full px-3 py-2 text-base border-2 rounded focus:outline-none focus:border-${border}`}
-              placeholder={label}
-              style={{ backgroundColor: bg }}
-              autoComplete="off"
-            />
-          </div>
-        ))}
-
-        {[
-          { label: 'Hijo/a 1', key: 'child1', bg: '#60a5fa20', border: 'blue-400' },
-          { label: 'Hijo/a 2', key: 'child2', bg: '#f9a8d420', border: 'pink-400' },
-        ].map(({ label, key, bg, border }) => (
-          <div key={key}>
-            <label className="block text-sm font-medium mb-1">{label}</label>
-            <input
-              type="text"
-              value={children[key]}
-              onChange={(e) => setChildren(prev => ({ ...prev, [key]: e.target.value }))}
-              className={`w-full px-3 py-2 text-base border-2 rounded focus:outline-none focus:border-${border}`}
-              placeholder={label}
-              style={{ backgroundColor: bg }}
-              autoComplete="off"
-            />
-          </div>
-        ))}
-
-        <div className="space-y-2 pt-2">
-          {['parent1', 'parent2', 'child1', 'child2'].map((key) => (
-            <button
-              key={key}
-              onClick={() => saveAndContinue(key)}
-              className="w-full text-white py-3 rounded-lg font-medium text-base"
-              style={{ backgroundColor: key === 'parent1' ? '#86efac' : key === 'parent2' ? '#fde047' : key === 'child1' ? '#60a5fa' : '#f9a8d4' }}
-              disabled={!parents.parent1 || !parents.parent2 || !children.child1 || !children.child2}
-            >
-              Continuar como {key === 'parent1' ? parents.parent1 : key === 'parent2' ? parents.parent2 : key === 'child1' ? children.child1 : children.child2}
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 };
