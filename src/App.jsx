@@ -500,7 +500,7 @@ const CoParentingApp = () => {
                   <>
                     <div className="font-bold mb-0.5">{date.getDate()}</div>
                     {periods.map((period) => {
-                      // Para padres: mostrar qué hijo tienen asignado
+                      // Para padres: mostrar nombres de hijas divididas en dos recuadros
                       if (isParentUser) {
                         const child1Key = getScheduleKey(date, 'child1', period);
                         const child2Key = getScheduleKey(date, 'child2', period);
@@ -509,39 +509,42 @@ const CoParentingApp = () => {
                         
                         const obs1 = notes[child1Key] || '';
                         const obs2 = notes[child2Key] || '';
-                        const hasObs = obs1 || obs2;
                         
-                        let displayText = '-';
-                        let bgColor = '#f3f4f6';
-                        
-                        if (child1Assigned && child2Assigned) {
-                          displayText = 'Ambos';
-                          bgColor = '#e0e7ff';
-                        } else if (child1Assigned) {
-                          displayText = (children.child1 || 'Hijo 1')[0].toUpperCase();
-                          bgColor = colors.child1;
-                        } else if (child2Assigned) {
-                          displayText = (children.child2 || 'Hijo 2')[0].toUpperCase();
-                          bgColor = colors.child2;
-                        }
+                        const child1Name = children.child1 || 'Hijo 1';
+                        const child2Name = children.child2 || 'Hijo 2';
                         
                         return (
                           <div
                             key={`${dateKey}_${period}`}
-                            onClick={() => hasObs && setPopupObs(obs1 || obs2)}
-                            className="text-[7px] text-center border-b py-0.5 cursor-pointer font-medium"
-                            style={{ 
-                              backgroundColor: bgColor,
-                              color: '#000'
-                            }}
+                            className="border-b py-0.5 flex gap-0.5"
                           >
-                            {displayText}
-                            {hasObs && <span className="ml-0.5">*</span>}
+                            <div
+                              onClick={() => obs1 && setPopupObs(obs1)}
+                              className="flex-1 text-[7px] text-center rounded cursor-pointer font-medium px-0.5"
+                              style={{ 
+                                backgroundColor: child1Assigned ? colors.child1 : '#f3f4f6',
+                                color: '#000'
+                              }}
+                            >
+                              {child1Assigned ? child1Name : '-'}
+                              {obs1 && <span className="ml-0.5">*</span>}
+                            </div>
+                            <div
+                              onClick={() => obs2 && setPopupObs(obs2)}
+                              className="flex-1 text-[7px] text-center rounded cursor-pointer font-medium px-0.5"
+                              style={{ 
+                                backgroundColor: child2Assigned ? colors.child2 : '#f3f4f6',
+                                color: '#000'
+                              }}
+                            >
+                              {child2Assigned ? child2Name : '-'}
+                              {obs2 && <span className="ml-0.5">*</span>}
+                            </div>
                           </div>
                         );
                       }
                       
-                      // Para hijos: mostrar qué padre les toca
+                      // Para hijos: mostrar nombre completo del padre/madre
                       if (isChildUser) {
                         const childKey = getScheduleKey(date, currentUser, period);
                         const assignedParent = schedule[childKey];
@@ -551,13 +554,13 @@ const CoParentingApp = () => {
                         let bgColor = '#f3f4f6';
                         
                         if (assignedParent === 'parent1') {
-                          displayText = (parents.parent1 || 'Papá')[0].toUpperCase();
+                          displayText = parents.parent1 || 'Papá';
                           bgColor = colors.parent1;
                         } else if (assignedParent === 'parent2') {
-                          displayText = (parents.parent2 || 'Mamá')[0].toUpperCase();
+                          displayText = parents.parent2 || 'Mamá';
                           bgColor = colors.parent2;
                         } else if (assignedParent === 'other') {
-                          displayText = (parents.other || 'Otro')[0].toUpperCase();
+                          displayText = parents.other || 'Otro';
                           bgColor = colors.other;
                         }
                         
