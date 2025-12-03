@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 
 const SetupScreen = ({ parents, setParents, children, setChildren, setCurrentUser, setStep }) => {
 
@@ -11,8 +11,11 @@ const SetupScreen = ({ parents, setParents, children, setChildren, setCurrentUse
   };
 
   const saveAndContinue = (user) => {
+    // Guardar nombres en localStorage
     localStorage.setItem('coparenting_parents', JSON.stringify(parents));
     localStorage.setItem('coparenting_children', JSON.stringify(children));
+
+    // Establecer usuario actual y pasar a la pantalla principal
     setCurrentUser(user);
     setStep('main');
   };
@@ -22,7 +25,6 @@ const SetupScreen = ({ parents, setParents, children, setChildren, setCurrentUse
       <h1 className="text-2xl font-bold text-center mb-8 text-blue-600">CoParenting</h1>
 
       <div className="space-y-3">
-
         <input
           type="text"
           placeholder="Nombre del padre 1"
@@ -41,14 +43,6 @@ const SetupScreen = ({ parents, setParents, children, setChildren, setCurrentUse
 
         <input
           type="text"
-          placeholder="Otro cuidador (opcional)"
-          value={parents.other}
-          onChange={(e) => handleParentChange("other", e.target.value)}
-          className="w-full p-2 border rounded"
-        />
-
-        <input
-          type="text"
           placeholder="Nombre hija 1"
           value={children.child1}
           onChange={(e) => handleChildChange("child1", e.target.value)}
@@ -62,7 +56,6 @@ const SetupScreen = ({ parents, setParents, children, setChildren, setCurrentUse
           onChange={(e) => handleChildChange("child2", e.target.value)}
           className="w-full p-2 border rounded"
         />
-
       </div>
 
       <div className="mt-4 flex flex-col gap-2">
@@ -80,14 +73,6 @@ const SetupScreen = ({ parents, setParents, children, setChildren, setCurrentUse
             className="w-full text-white py-3 rounded-lg font-medium text-lg bg-blue-500"
           >
             Continuar como {parents.parent2}
-          </button>
-        )}
-        {parents.other && (
-          <button
-            onClick={() => saveAndContinue('other')}
-            className="w-full text-white py-3 rounded-lg font-medium text-lg bg-blue-500"
-          >
-            Continuar como {parents.other}
           </button>
         )}
         {children.child1 && (
