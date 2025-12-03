@@ -1,15 +1,25 @@
 import React, { useState, useCallback } from 'react';
 import { Calendar, Users, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import SetupScreen from './SetupScreen';
-import { supabase } from './supabaseClient.js'; // uso único del cliente Supabase
+import { createClient } from '@supabase/supabase-js';
+
+// --- Configuración Supabase ---
+const supabaseUrl = 'TU_SUPABASE_URL';
+const supabaseKey = 'TU_SUPABASE_ANON_KEY';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const CoParentingApp = () => {
   // --- Persistencia nombres ---
   const savedParents = typeof window !== 'undefined' ? localStorage.getItem('coparenting_parents') : null;
   const savedChildren = typeof window !== 'undefined' ? localStorage.getItem('coparenting_children') : null;
 
-  const [step, setStep] = useState('setup');
-  const [showNameEntry, setShowNameEntry] = useState(!savedParents || !savedChildren);
+  // Paso 1: comprobar si hay datos guardados
+const hasSavedData = savedParents && savedChildren;
+
+// Paso 2: definir el estado inicial
+const [step, setStep] = useState(hasSavedData ? 'main' : 'setup');
+const [showNameEntry, setShowNameEntry] = useState(!hasSavedData);
+
   const [parents, setParents] = useState(savedParents ? JSON.parse(savedParents) : { parent1: '', parent2: '', other: '' });
   const [children, setChildren] = useState(savedChildren ? JSON.parse(savedChildren) : { child1: '', child2: '' });
 
@@ -101,92 +111,18 @@ const CoParentingApp = () => {
     });
   }, []);
 
-  // Guardar schedule en la tabla 'asignaciones'
-  // Para cada celda con valor (parent key: 'parent1'|'parent2'|'other'), busca padre_id e hija_id por nombre
-  // y crea los inserts { padre_id, hija_id, fecha, periodo }.
+  // Función para guardar en Supabase
   const saveScheduleInSupabase = async () => {
-    try {
-      const keys = Object.keys(schedule).filter(k => schedule[k]); // solo celdas asignadas
-      if (keys.length === 0) {
-        alert('No hay asignaciones para guardar.');
-        return;
-      }
-
-      const inserts = [];
-
-      for (const k of keys) {
-        // k: "YYYY-MM-DD_childX_Periodo"
-        const parts = k.split('_');
-        if (parts.length < 3) continue;
-        const fecha = parts[0];
-        const childKey = parts[1]; // child1 | child2
-        const periodo = parts.slice(2).join('_'); // por si tiene guiones
-        const parentKey = schedule[k]; // 'parent1'|'parent2'|'other'
-        const padreNombre = parents[parentKey]; // nombre real
-        const hijaNombre = children[childKey];
-
-        if (!padreNombre || !hijaNombre) {
-          // No tenemos nombres, saltar
-          continue;
-        }
-
-        // buscar ids en la base de datos
-        const { data: padreData, error: padreErr } = await supabase
-          .from('padres')
-          .select('id')
-          .eq('nombre', padreNombre)
-          .limit(1)
-          .maybeSingle();
-
-        if (padreErr) {
-          console.error('Error buscando padre:', padreErr);
-          continue;
-        }
-        if (!padreData) {
-          console.warn('Padre no encontrado:', padreNombre);
-          continue;
-        }
-
-        const { data: hijaData, error: hijaErr } = await supabase
-          .from('hijas')
-          .select('id')
-          .eq('nombre', hijaNombre)
-          .limit(1)
-          .maybeSingle();
-
-        if (hijaErr) {
-          console.error('Error buscando hija:', hijaErr);
-          continue;
-        }
-        if (!hijaData) {
-          console.warn('Hija no encontrada:', hijaNombre);
-          continue;
-        }
-
-        inserts.push({
-          padre_id: padreData.id,
-          hija_id: hijaData.id,
-          fecha,
-          periodo
-        });
-      }
-
-      if (inserts.length === 0) {
-        alert('No se generaron inserts (comprueba que padres/hijas existen en la base de datos).');
-        return;
-      }
-
-      const { data, error } = await supabase.from('asignaciones').insert(inserts);
-
-      if (error) {
-        console.error('Error insert asignaciones:', error);
-        alert('Error guardando en Supabase: ' + (error.message || JSON.stringify(error)));
-      } else {
-        alert('Asignaciones guardadas correctamente.');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Error inesperado al guardar: ' + (err.message || err));
+    const data = Object.keys(schedule).map(key => ({
+      key,
+      value: schedule[key],
+      note: notes[key] || ''
+    }));
+    const { error } = await supabase.from('schedules').upsert(data);
+    if (error) {
+      alert('Error guardando en Supabase: ' + error.message);
+    } else {
+      alert('Asignaciones guardadas correctamente');
     }
   };
 
@@ -265,6 +201,7 @@ const CoParentingApp = () => {
     );
   };
 
+  // WeekCalendar, GlobalWeekCalendar, WeekView y MonthView optimizados para móvil (fuentes pequeñas y recuadros compactos)
   const WeekCalendar = ({ childFilter = null, showChildName = false }) => {
     const weekDates = getWeekDates(currentDate);
     const firstMonth = weekDates[0].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
@@ -291,50 +228,47 @@ const CoParentingApp = () => {
           {periods.map((period) => (
             <React.Fragment key={period}>
               <div className="font-bold text-[8px]">{period.substring(0, 3)}</div>
-              {weekDates.map((d) => {
-                const date = d;
-                return (
-                  <div 
-                    key={`${formatDate(date)}_${period}`} 
-                    className="border rounded p-0.5 min-h-[24px] flex items-center justify-center"
-                  >
-                    {(childFilter ? [childFilter] : ['child1', 'child2']).map((child) => {
-                      const sk = getScheduleKey(date, child, period);
-                      const assigned = schedule[sk];
-                      const obs = notes[sk] || '';
-                      
-                      if (currentUser === 'parent1' || currentUser === 'parent2') {
-                        const isWithThisParent = assigned === currentUser;
-                        const displayName = isWithThisParent ? (children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2')) : '-';
-                        return (
-                          <div 
-                            key={sk}
-                            onClick={() => obs && setPopupObs(obs)}
-                            className="text-[7px] text-center rounded px-0.5 cursor-pointer"
-                            style={{ backgroundColor: isWithThisParent ? colors[child] : '#f3f4f6' }}
-                          >
-                            {displayName}
-                            {obs && <span className="ml-0.5">*</span>}
-                          </div>
-                        );
-                      } else {
-                        const displayName = assigned ? (assigned === 'parent1' ? 'Papá' : assigned === 'parent2' ? 'Mamá' : parents.other || 'Otro') : '-';
-                        return (
-                          <div 
-                            key={sk}
-                            onClick={() => obs && setPopupObs(obs)}
-                            className="text-[7px] text-center rounded px-0.5 cursor-pointer"
-                            style={{ backgroundColor: assigned ? colors[assigned] : '#f3f4f6' }}
-                          >
-                            {displayName}
-                            {obs && <span className="ml-0.5">*</span>}
-                          </div>
-                        );
-                      }
-                    })}
-                  </div>
-                );
-              })}
+              {weekDates.map((d) => (
+                <div 
+                  key={`${formatDate(d)}_${period}`} 
+                  className="border rounded p-0.5 min-h-[24px] flex items-center justify-center"
+                >
+                  {(childFilter ? [childFilter] : ['child1', 'child2']).map((child) => {
+                    const sk = getScheduleKey(d, child, period);
+                    const assigned = schedule[sk];
+                    const obs = notes[sk] || '';
+                    
+                    if (currentUser === 'parent1' || currentUser === 'parent2') {
+                      const isWithThisParent = assigned === currentUser;
+                      const displayName = isWithThisParent ? (children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2')) : '-';
+                      return (
+                        <div 
+                          key={sk}
+                          onClick={() => obs && setPopupObs(obs)}
+                          className="text-[7px] text-center rounded px-0.5 cursor-pointer"
+                          style={{ backgroundColor: isWithThisParent ? colors[child] : '#f3f4f6' }}
+                        >
+                          {displayName}
+                          {obs && <span className="ml-0.5">*</span>}
+                        </div>
+                      );
+                    } else {
+                      const displayName = assigned ? (assigned === 'parent1' ? 'Papá' : assigned === 'parent2' ? 'Mamá' : parents.other || 'Otro') : '-';
+                      return (
+                        <div 
+                          key={sk}
+                          onClick={() => obs && setPopupObs(obs)}
+                          className="text-[7px] text-center rounded px-0.5 cursor-pointer"
+                          style={{ backgroundColor: assigned ? colors[assigned] : '#f3f4f6' }}
+                        >
+                          {displayName}
+                          {obs && <span className="ml-0.5">*</span>}
+                        </div>
+                      );
+                    }
+                  })}
+                </div>
+              ))}
             </React.Fragment>
           ))}
         </div>
