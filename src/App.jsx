@@ -73,14 +73,23 @@ const CoParentingApp = () => {
 
   const loadScheduleFromSupabase = useCallback(async () => {
     try {
-      const { data: asignaciones, error } = await supabase.from('asignaciones').select('*, padres:padre_id(nombre), hijas:hija_id(nombre)');
+      const { data: asignaciones, error } = await supabase.from('asignaciones').select('id, padre_id, hija_id, fecha, periodo');
       if (error) { console.error('Error cargando asignaciones:', error); return; }
       if (!asignaciones || asignaciones.length === 0) { console.log('No hay asignaciones guardadas'); return; }
+      console.log('Asignaciones recibidas de Supabase:', asignaciones.length);
+      const padreIds = [...new Set(asignaciones.map(a => a.padre_id))];
+      const hijaIds = [...new Set(asignaciones.map(a => a.hija_id))];
+      const { data: padresData } = await supabase.from('padres').select('id, nombre').in('id', padreIds);
+      const { data: hijasData } = await supabase.from('hijas').select('id, nombre').in('id', hijaIds);
+      const padresMap = {};
+      const hijasMap = {};
+      padresData?.forEach(p => { padresMap[p.id] = p.nombre; });
+      hijasData?.forEach(h => { hijasMap[h.id] = h.nombre; });
       const newSchedule = {};
       asignaciones.forEach(asig => {
-        const padreNombre = asig.padres?.nombre;
-        const hijaNombre = asig.hijas?.nombre;
-        if (!padreNombre || !hijaNombre) return;
+        const padreNombre = padresMap[asig.padre_id];
+        const hijaNombre = hijasMap[asig.hija_id];
+        if (!padreNombre || !hijaNombre) { console.warn('Nombre no encontrado para:', asig); return; }
         let parentKey = null;
         if (parents.parent1 === padreNombre) parentKey = 'parent1';
         else if (parents.parent2 === padreNombre) parentKey = 'parent2';
@@ -91,10 +100,12 @@ const CoParentingApp = () => {
         if (parentKey && childKey) {
           const scheduleKey = `${asig.fecha}_${childKey}_${asig.periodo}`;
           newSchedule[scheduleKey] = parentKey;
+        } else {
+          console.warn('No se pudo mapear:', { padreNombre, hijaNombre, asig });
         }
       });
       setSchedule(newSchedule);
-      console.log('Asignaciones cargadas desde Supabase:', Object.keys(newSchedule).length);
+      console.log('Asignaciones cargadas correctamente:', Object.keys(newSchedule).length);
     } catch (err) { console.error('Error inesperado al cargar:', err); }
   }, [parents, children]);
 
