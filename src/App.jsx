@@ -566,19 +566,27 @@ const CoParentingApp = () => {
 
               return (
                 <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden">
-                  {/* Cabecera: número del día + turnos en la misma zona */}
-                  <div className="flex justify-between items-start" style={{ minHeight: isParentUser ? '22px' : '14px' }}>
+                  {/* Línea 1: Número del día + Padre + su turno */}
+                  <div className="flex justify-between items-center" style={{ fontSize: 6, lineHeight: '8px' }}>
                     <span className="font-bold text-[9px]">{date.getDate()}</span>
-                    {isParentUser && (turnoPadre || turnoMadreCorto) && (
-                      <div className="text-right" style={{ fontSize: 5, lineHeight: '7px' }}>
-                        {turnoPadre && <div className="truncate" style={{ color: colors.parent1 }}>{parents.parent1?.split(' ')[0]} {codP}</div>}
-                        {turnoMadreCorto && <div className="truncate" style={{ color: '#065f46' }}>{parents.parent2?.split(' ')[0]} {turnoMadreCorto}</div>}
+                    {isParentUser && (
+                      <div className="flex-1 flex justify-between ml-1 truncate" style={{ color: colors.parent1 }}>
+                        <span className="truncate">{parents.parent1}</span>
+                        <span className="font-bold ml-0.5">{codP || '-'}</span>
                       </div>
                     )}
                   </div>
                   
+                  {/* Línea 2: Madre + su turno */}
+                  {isParentUser && (
+                    <div className="flex justify-between items-center truncate" style={{ fontSize: 6, lineHeight: '8px', color: '#065f46' }}>
+                      <span className="truncate">{parents.parent2}</span>
+                      <span className="font-bold ml-0.5">{turnoMadreCorto || '-'}</span>
+                    </div>
+                  )}
+                  
                   {/* Asignaciones - ocupan todo el espacio restante */}
-                  <div className="flex-1 flex flex-col gap-0.5">
+                  <div className="flex-1 flex flex-col gap-0.5 mt-0.5">
                     {periods.map((period) => {
                       if (isParentUser) {
                         const c1k = getScheduleKey(date, 'child1', period);
@@ -587,10 +595,10 @@ const CoParentingApp = () => {
                         const c2a = schedule[c2k] === currentUser;
                         return (
                           <div key={`${dateKey}_${period}`} className="flex gap-0.5 flex-1">
-                            <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c1a ? colors.child1 : '#e5e7eb' }}>
+                            <div className="flex-1 flex items-center justify-center rounded font-bold text-[9px]" style={{ backgroundColor: c1a ? colors.child1 : '#e5e7eb' }}>
                               {c1a ? (children.child1 || 'H1')[0] : '-'}
                             </div>
-                            <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c2a ? colors.child2 : '#e5e7eb' }}>
+                            <div className="flex-1 flex items-center justify-center rounded font-bold text-[9px]" style={{ backgroundColor: c2a ? colors.child2 : '#e5e7eb' }}>
                               {c2a ? (children.child2 || 'H2')[0] : '-'}
                             </div>
                           </div>
@@ -604,7 +612,7 @@ const CoParentingApp = () => {
                         if (assigned === 'parent1') { bg = colors.parent1; txt = 'P'; }
                         else if (assigned === 'parent2') { bg = colors.parent2; txt = 'M'; }
                         else if (assigned === 'other') { bg = colors.other; txt = 'O'; }
-                        return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: bg }}>{txt}</div>;
+                        return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[9px]" style={{ backgroundColor: bg }}>{txt}</div>;
                       }
                       return null;
                     })}
