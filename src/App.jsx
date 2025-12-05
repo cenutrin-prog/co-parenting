@@ -634,6 +634,183 @@ const CoParentingApp = () => {
     );
   };
 
+  // VISTA ESTADÍSTICAS
+  const StatsView = () => {
+    // Calcular estadísticas desde el schedule
+    const calcularEstadisticas = () => {
+      const stats = {
+        parent1: { child1: { total: 0, LV: 0, SD: 0 }, child2: { total: 0, LV: 0, SD: 0 }, ambas: { total: 0, LV: 0, SD: 0 } },
+        parent2: { child1: { total: 0, LV: 0, SD: 0 }, child2: { total: 0, LV: 0, SD: 0 }, ambas: { total: 0, LV: 0, SD: 0 } },
+        other: { child1: { total: 0, LV: 0, SD: 0 }, child2: { total: 0, LV: 0, SD: 0 }, ambas: { total: 0, LV: 0, SD: 0 } }
+      };
+
+      Object.entries(schedule).forEach(([key, parentKey]) => {
+        if (!parentKey) return;
+        
+        // key formato: "2024-12-09_child1_Mañana"
+        const parts = key.split('_');
+        if (parts.length < 3) return;
+        
+        const fecha = parts[0];
+        const childKey = parts[1];
+        
+        // Obtener día de la semana (0=domingo, 6=sábado)
+        const date = new Date(fecha);
+        const dayOfWeek = date.getDay();
+        const esFinDeSemana = dayOfWeek === 0 || dayOfWeek === 6; // Domingo o Sábado
+        
+        if (stats[parentKey] && stats[parentKey][childKey]) {
+          stats[parentKey][childKey].total++;
+          stats[parentKey].ambas.total++;
+          
+          if (esFinDeSemana) {
+            stats[parentKey][childKey].SD++;
+            stats[parentKey].ambas.SD++;
+          } else {
+            stats[parentKey][childKey].LV++;
+            stats[parentKey].ambas.LV++;
+          }
+        }
+      });
+
+      return stats;
+    };
+
+    const stats = calcularEstadisticas();
+    
+    // Componente de tabla para cada cuidador
+    const TablaCuidador = ({ parentKey, nombre, color }) => {
+      const data = stats[parentKey];
+      const child1Name = children.child1 || 'Hija 1';
+      const child2Name = children.child2 || 'Hija 2';
+      
+      return (
+        <div className="mb-4">
+          <div className="font-bold text-sm mb-2 p-2 rounded" style={{ backgroundColor: color + '40', color: color === '#86efac' ? '#065f46' : color }}>
+            {nombre}
+          </div>
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border p-1 text-left"></th>
+                <th className="border p-1 text-center font-bold">TOTAL</th>
+                <th className="border p-1 text-center">L-V</th>
+                <th className="border p-1 text-center">S-D</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="border p-1 font-medium" style={{ backgroundColor: colors.child1 + '30' }}>{child1Name}</td>
+                <td className="border p-1 text-center font-bold">{data.child1.total}</td>
+                <td className="border p-1 text-center">{data.child1.LV}</td>
+                <td className="border p-1 text-center">{data.child1.SD}</td>
+              </tr>
+              <tr>
+                <td className="border p-1 font-medium" style={{ backgroundColor: colors.child2 + '30' }}>{child2Name}</td>
+                <td className="border p-1 text-center font-bold">{data.child2.total}</td>
+                <td className="border p-1 text-center">{data.child2.LV}</td>
+                <td className="border p-1 text-center">{data.child2.SD}</td>
+              </tr>
+              <tr className="bg-gray-50 font-bold">
+                <td className="border p-1">AMBAS</td>
+                <td className="border p-1 text-center">{data.ambas.total}</td>
+                <td className="border p-1 text-center">{data.ambas.LV}</td>
+                <td className="border p-1 text-center">{data.ambas.SD}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      );
+    };
+
+    // Resumen comparativo
+    const ResumenComparativo = () => {
+      const totalParent1 = stats.parent1.ambas.total;
+      const totalParent2 = stats.parent2.ambas.total;
+      const totalOther = stats.other.ambas.total;
+      const granTotal = totalParent1 + totalParent2 + totalOther;
+      
+      const pctParent1 = granTotal > 0 ? ((totalParent1 / granTotal) * 100).toFixed(1) : 0;
+      const pctParent2 = granTotal > 0 ? ((totalParent2 / granTotal) * 100).toFixed(1) : 0;
+      const pctOther = granTotal > 0 ? ((totalOther / granTotal) * 100).toFixed(1) : 0;
+
+      return (
+        <div className="mb-4 p-2 bg-gray-50 rounded">
+          <div className="font-bold text-sm mb-2">📊 Resumen Global</div>
+          <div className="space-y-2">
+            {/* Barra de progreso padre */}
+            <div>
+              <div className="flex justify-between text-xs mb-1">
+                <span style={{ color: colors.parent1 }}>{parents.parent1}</span>
+                <span className="font-bold">{totalParent1} franjas ({pctParent1}%)</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded h-3">
+                <div className="h-3 rounded" style={{ width: `${pctParent1}%`, backgroundColor: colors.parent1 }}></div>
+              </div>
+            </div>
+            {/* Barra de progreso madre */}
+            <div>
+              <div className="flex justify-between text-xs mb-1">
+                <span style={{ color: '#065f46' }}>{parents.parent2}</span>
+                <span className="font-bold">{totalParent2} franjas ({pctParent2}%)</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded h-3">
+                <div className="h-3 rounded" style={{ width: `${pctParent2}%`, backgroundColor: colors.parent2 }}></div>
+              </div>
+            </div>
+            {/* Barra de progreso otro cuidador (si existe) */}
+            {parents.other && totalOther > 0 && (
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span style={{ color: colors.other }}>{parents.other}</span>
+                  <span className="font-bold">{totalOther} franjas ({pctOther}%)</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded h-3">
+                  <div className="h-3 rounded" style={{ width: `${pctOther}%`, backgroundColor: colors.other }}></div>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="text-xs text-gray-500 mt-2 text-right">
+            Total: {granTotal} franjas registradas
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div className="p-2 h-full overflow-y-auto">
+        <div className="text-center font-bold text-sm mb-3">📈 Estadísticas de Custodia</div>
+        
+        <ResumenComparativo />
+        
+        <TablaCuidador 
+          parentKey="parent1" 
+          nombre={parents.parent1 || 'Padre'} 
+          color={colors.parent1} 
+        />
+        
+        <TablaCuidador 
+          parentKey="parent2" 
+          nombre={parents.parent2 || 'Madre'} 
+          color={colors.parent2} 
+        />
+        
+        {parents.other && (
+          <TablaCuidador 
+            parentKey="other" 
+            nombre={parents.other} 
+            color={colors.other} 
+          />
+        )}
+
+        <div className="text-[10px] text-gray-400 text-center mt-4">
+          L-V = Lunes a Viernes | S-D = Sábado y Domingo
+        </div>
+      </div>
+    );
+  };
+
   const handleProfileClick = () => { if (currentUser === 'parent1' || currentUser === 'parent2') setStep('setup'); };
 
   if (step === 'setup') {
@@ -679,6 +856,7 @@ const CoParentingApp = () => {
         {currentView === 'daily' && <DailyView />}
         {currentView === 'week' && <WeekView />}
         {currentView === 'month' && <MonthView />}
+        {currentView === 'stats' && <StatsView />}
       </div>
       {popupObs && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setPopupObs(null)}>
