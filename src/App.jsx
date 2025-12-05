@@ -532,13 +532,20 @@ const CoParentingApp = () => {
     const isParentUser = currentUser === 'parent1' || currentUser === 'parent2';
     const childName = isChildUser ? (children[currentUser] || 'Hijo').toUpperCase() : '';
 
-    // Función para obtener texto corto del turno madre (Mañana, Tarde, Mañana/Tarde)
+    // Función para obtener texto corto del turno madre (Mañ, Tar, Noc, Mañ/Tar)
     const getTurnoMadreCorto = (turnoStr) => {
       if (!turnoStr) return '';
       const parsed = parseTurnoMadre(turnoStr);
       if (parsed.length === 0) return '';
-      if (parsed.length === 1) return parsed[0].tipo || '';
-      return parsed.map(t => t.tipo || '').filter(t => t).join('/');
+      const abreviar = (tipo) => {
+        if (!tipo) return '';
+        if (tipo.toLowerCase().startsWith('mañ')) return 'Mañ';
+        if (tipo.toLowerCase().startsWith('tar')) return 'Tar';
+        if (tipo.toLowerCase().startsWith('noc')) return 'Noc';
+        return tipo.substring(0, 3);
+      };
+      if (parsed.length === 1) return abreviar(parsed[0].tipo);
+      return parsed.map(t => abreviar(t.tipo)).filter(t => t).join('/');
     };
 
     // Calcular número de filas del mes (semanas)
@@ -566,24 +573,25 @@ const CoParentingApp = () => {
 
               return (
                 <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden">
-                  {/* Línea 1: Número del día + Padre + su turno */}
-                  <div className="flex justify-between items-center" style={{ fontSize: 6, lineHeight: '8px' }}>
-                    <span className="font-bold text-[9px]">{date.getDate()}</span>
+                  {/* Cabecera con número y turnos */}
+                  <div className="flex" style={{ fontSize: 6, lineHeight: '8px' }}>
+                    {/* Número del día */}
+                    <span className="font-bold text-[9px] mr-1">{date.getDate()}</span>
+                    
+                    {/* Turnos de los padres */}
                     {isParentUser && (
-                      <div className="flex-1 flex justify-between ml-1 truncate" style={{ color: colors.parent1 }}>
-                        <span className="truncate">{parents.parent1}</span>
-                        <span className="font-bold ml-0.5">{codP || '-'}</span>
+                      <div className="flex-1 flex flex-col">
+                        <div className="flex justify-between" style={{ color: colors.parent1 }}>
+                          <span className="truncate">{parents.parent1}</span>
+                          <span className="font-bold ml-0.5">{codP || '-'}</span>
+                        </div>
+                        <div className="flex justify-between" style={{ color: '#065f46' }}>
+                          <span className="truncate">{parents.parent2}</span>
+                          <span className="font-bold ml-0.5">{turnoMadreCorto || '-'}</span>
+                        </div>
                       </div>
                     )}
                   </div>
-                  
-                  {/* Línea 2: Madre + su turno */}
-                  {isParentUser && (
-                    <div className="flex justify-between items-center truncate" style={{ fontSize: 6, lineHeight: '8px', color: '#065f46' }}>
-                      <span className="truncate">{parents.parent2}</span>
-                      <span className="font-bold ml-0.5">{turnoMadreCorto || '-'}</span>
-                    </div>
-                  )}
                   
                   {/* Asignaciones - ocupan todo el espacio restante */}
                   <div className="flex-1 flex flex-col gap-0.5 mt-0.5">
@@ -609,10 +617,10 @@ const CoParentingApp = () => {
                         const assigned = schedule[ck];
                         let bg = '#e5e7eb';
                         let txt = '-';
-                        if (assigned === 'parent1') { bg = colors.parent1; txt = 'P'; }
-                        else if (assigned === 'parent2') { bg = colors.parent2; txt = 'M'; }
-                        else if (assigned === 'other') { bg = colors.other; txt = 'O'; }
-                        return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[9px]" style={{ backgroundColor: bg }}>{txt}</div>;
+                        if (assigned === 'parent1') { bg = colors.parent1; txt = 'Papá'; }
+                        else if (assigned === 'parent2') { bg = colors.parent2; txt = 'Mamá'; }
+                        else if (assigned === 'other') { bg = colors.other; txt = parents.other || 'Otro'; }
+                        return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[7px]" style={{ backgroundColor: bg }}>{txt}</div>;
                       }
                       return null;
                     })}
