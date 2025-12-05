@@ -9,7 +9,6 @@ const CoParentingApp = () => {
   const savedUser = typeof window !== 'undefined' ? localStorage.getItem('coparenting_currentUser') : null;
   const [parents, setParents] = useState(savedParents ? JSON.parse(savedParents) : { parent1: '', parent2: '' });
   const [children, setChildren] = useState(savedChildren ? JSON.parse(savedChildren) : { child1: '', child2: '' });
-  // Si hay usuario guardado, ir directo a 'main', si no, ir a 'setup'
   const [step, setStep] = useState(savedParents && savedChildren && savedUser ? 'main' : 'setup');
   const [currentUser, setCurrentUser] = useState(savedUser || null);
   const colors = { parent1: '#FF6B35', parent2: '#86efac', child1: '#FDD835', child2: '#00BCD4', other: '#FF69B4' };
@@ -21,6 +20,16 @@ const CoParentingApp = () => {
   const [popupObs, setPopupObs] = useState(null);
   const periods = ['Mañana', 'Tarde', 'Noche'];
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const monthsShort = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+  // Función para obtener el número de semana del año
+  const getWeekNumber = (date) => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  };
 
   const saveAndContinue = (user) => {
     localStorage.setItem('coparenting_parents', JSON.stringify(parents));
@@ -74,7 +83,6 @@ const CoParentingApp = () => {
     setSchedule(prev => { if (prev[key] === value) return prev; return { ...prev, [key]: value }; });
   }, []);
 
-  // FUNCIÓN MEJORADA: Cargar asignaciones Y observaciones desde Supabase
   const loadScheduleFromSupabase = useCallback(async () => {
     try {
       const { data: asignaciones, error } = await supabase.from('asignaciones').select('id, padre_id, hija_id, fecha, periodo, observaciones');
@@ -112,7 +120,6 @@ const CoParentingApp = () => {
         if (parentKey && childKey) {
           const scheduleKey = `${asig.fecha}_${childKey}_${asig.periodo}`;
           newSchedule[scheduleKey] = parentKey;
-          // NUEVO: También cargar las observaciones
           if (asig.observaciones) {
             newNotes[scheduleKey] = asig.observaciones;
           }
@@ -132,14 +139,11 @@ const CoParentingApp = () => {
     if (step === 'main' && parents.parent1 && children.child1) { loadScheduleFromSupabase(); }
   }, [step, parents.parent1, children.child1, loadScheduleFromSupabase]);
 
-  // FUNCIÓN MEJORADA: Guardar asignaciones Y observaciones en Supabase
-  // Ahora usa UPSERT para evitar duplicados
   const saveScheduleInSupabase = async () => {
     try {
       const keys = Object.keys(schedule).filter(k => schedule[k]);
       if (keys.length === 0) { alert('No hay asignaciones para guardar.'); return; }
       
-      // Primero, obtener los IDs de padres e hijas
       const { data: padresData } = await supabase.from('padres').select('id, nombre');
       const { data: hijasData } = await supabase.from('hijas').select('id, nombre');
       
@@ -168,7 +172,6 @@ const CoParentingApp = () => {
         if (!padreId) { console.warn('Padre no encontrado:', padreNombre); continue; }
         if (!hijaId) { console.warn('Hija no encontrada:', hijaNombre); continue; }
         
-        // NUEVO: Incluir observaciones en el guardado
         const observaciones = notes[k] || null;
         
         upserts.push({ 
@@ -185,13 +188,11 @@ const CoParentingApp = () => {
         return; 
       }
       
-      // Borrar asignaciones existentes para las fechas que vamos a guardar
       const fechasUnicas = [...new Set(upserts.map(u => u.fecha))];
       for (const fecha of fechasUnicas) {
         await supabase.from('asignaciones').delete().eq('fecha', fecha);
       }
       
-      // Insertar las nuevas asignaciones
       const { data, error } = await supabase.from('asignaciones').insert(upserts);
       
       if (error) { 
@@ -211,15 +212,15 @@ const CoParentingApp = () => {
     const scheduleValue = schedule[scheduleKey] || '';
     const noteValue = notes[scheduleKey] || '';
     return (
-      <div className="border rounded p-1">
-        <div className="text-[10px] font-medium mb-1" style={{ color: colors[child] }}>
+      <div className="border rounded p-1 flex-1">
+        <div className="text-[11px] font-medium mb-1" style={{ color: colors[child] }}>
           {childName}
         </div>
         <select 
           value={scheduleValue} 
           onChange={(e) => handleScheduleChange(scheduleKey, e.target.value)} 
           disabled={isDisabled} 
-          className="w-full text-[10px] p-1 border rounded" 
+          className="w-full text-[11px] p-1 border rounded" 
           style={{ backgroundColor: scheduleValue ? colors[scheduleValue] + '40' : 'white' }}
         >
           <option value="">Seleccionar</option>
@@ -229,41 +230,48 @@ const CoParentingApp = () => {
         </select>
         <textarea 
           key={scheduleKey} 
-          placeholder="Observaciones..." 
+          placeholder="Obs..." 
           defaultValue={noteValue} 
           onBlur={(e) => handleNoteChange(scheduleKey, e.target.value)} 
           onChange={(e) => { notes[scheduleKey] = e.target.value; }} 
           disabled={isDisabled} 
           className="w-full text-[10px] p-1 border rounded mt-1" 
-          style={{ minHeight: 36, resize: 'vertical' }} 
+          style={{ minHeight: 28, resize: 'none' }} 
         />
       </div>
     );
   });
 
+  // VISTA DÍA - Ajustada para no hacer scroll y mostrar mes
   const DailyView = () => {
     const isChildUser = currentUser === 'child1' || currentUser === 'child2';
     const childrenToShow = isChildUser ? [currentUser] : ['child1', 'child2'];
+    const dayName = daysOfWeek[currentDate.getDay() === 0 ? 6 : currentDate.getDay() - 1];
+    const dayNum = currentDate.getDate();
+    const monthName = monthsShort[currentDate.getMonth()];
+    
     return (
-      <div className="p-1 flex flex-col gap-1" style={{ fontSize: 10 }}>
-        <div className="flex justify-between items-center mb-1">
-          <button onClick={() => setCurrentDate(d => addDays(d, -1))} className="px-2 py-1 border rounded text-[10px]">◀</button>
-          <div className="font-bold text-[12px] text-center">
-            {daysOfWeek[currentDate.getDay() === 0 ? 6 : currentDate.getDay()-1]} {currentDate.getDate()}
+      <div className="p-2 flex flex-col h-full" style={{ fontSize: 11 }}>
+        <div className="flex justify-between items-center mb-2">
+          <button onClick={() => setCurrentDate(d => addDays(d, -1))} className="px-3 py-1 border rounded text-sm">◀</button>
+          <div className="font-bold text-sm text-center">
+            {dayName} {dayNum} {monthName}
           </div>
-          <button onClick={() => setCurrentDate(d => addDays(d, 1))} className="px-2 py-1 border rounded text-[10px]">▶</button>
+          <button onClick={() => setCurrentDate(d => addDays(d, 1))} className="px-3 py-1 border rounded text-sm">▶</button>
         </div>
-        {periods.map((period) => (
-          <div key={period} className="mb-1 border rounded p-1">
-            <div className="text-[10px] font-bold mb-1 uppercase">{period}</div>
-            <div className="grid grid-cols-2 gap-1">
-              {childrenToShow.map((child) => { 
-                const sk = getScheduleKey(currentDate, child, period); 
-                return (<DayPeriodCell key={sk} scheduleKey={sk} child={child} isDisabled={isChildUser} />); 
-              })}
+        <div className="flex-1 flex flex-col gap-2">
+          {periods.map((period) => (
+            <div key={period} className="flex-1 border rounded p-2 flex flex-col">
+              <div className="text-xs font-bold mb-1 uppercase">{period}</div>
+              <div className="flex gap-2 flex-1">
+                {childrenToShow.map((child) => { 
+                  const sk = getScheduleKey(currentDate, child, period); 
+                  return (<DayPeriodCell key={sk} scheduleKey={sk} child={child} isDisabled={isChildUser} />); 
+                })}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     );
   };
@@ -377,11 +385,14 @@ const CoParentingApp = () => {
     );
   };
 
+  // VISTA SEMANA - Con número de semana del año
   const WeekView = () => {
     const weekDates = getWeekDates(currentDate);
     const firstMonth = weekDates[0].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
     const lastMonth = weekDates[6].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
     const monthLabel = firstMonth === lastMonth ? firstMonth : `${firstMonth} / ${lastMonth}`;
+    const weekNumber = getWeekNumber(weekDates[0]);
+    
     if (currentUser === 'child1' || currentUser === 'child2') {
       const firstChild = currentUser;
       const secondChild = currentUser === 'child1' ? 'child2' : 'child1';
@@ -389,7 +400,7 @@ const CoParentingApp = () => {
         <div className="p-1" style={{ fontSize: 10 }}>
           <div className="flex items-center justify-between mb-1">
             <button onClick={() => setCurrentDate(d => addDays(d, -7))} className="p-1 text-[10px]"><ChevronLeft size={14} /></button>
-            <div className="text-xs font-medium">Semana</div>
+            <div className="text-xs font-medium">Semana {weekNumber}</div>
             <button onClick={() => setCurrentDate(d => addDays(d, 7))} className="p-1 text-[10px]"><ChevronRight size={14} /></button>
           </div>
           <WeekCalendar childFilter={firstChild} showChildName={true} />
@@ -402,7 +413,7 @@ const CoParentingApp = () => {
       <div className="p-1" style={{ fontSize: 10 }}>
         <div className="flex items-center justify-between mb-1">
           <button onClick={() => setCurrentDate(d => addDays(d, -7))} className="p-1 text-[10px]"><ChevronLeft size={14} /></button>
-          <div className="text-xs font-medium">{monthLabel} - {parentName}</div>
+          <div className="text-xs font-medium">{monthLabel} - Semana {weekNumber} - {parentName}</div>
           <button onClick={() => setCurrentDate(d => addDays(d, 7))} className="p-1 text-[10px]"><ChevronRight size={14} /></button>
         </div>
         <WeekCalendar />
@@ -411,16 +422,21 @@ const CoParentingApp = () => {
     );
   };
 
+  // VISTA MES - Con nombre del hijo en mayúsculas para perfil hijos
   const MonthView = () => {
     const monthDates = getMonthDates(currentDate);
     const monthLabel = currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
     const isChildUser = currentUser === 'child1' || currentUser === 'child2';
     const isParentUser = currentUser === 'parent1' || currentUser === 'parent2';
+    const childName = isChildUser ? (children[currentUser] || 'Hijo').toUpperCase() : '';
+    
     return (
       <div className="p-1" style={{ fontSize: 9 }}>
         <div className="flex items-center justify-between mb-1">
           <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1 text-[10px]"><ChevronLeft size={14} /></button>
-          <div className="text-xs font-medium">{monthLabel}</div>
+          <div className="text-xs font-medium">
+            {isChildUser ? `${childName}  ${monthLabel}` : monthLabel}
+          </div>
           <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1 text-[10px]"><ChevronRight size={14} /></button>
         </div>
         <div className="grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
@@ -504,6 +520,16 @@ const CoParentingApp = () => {
     );
   };
 
+  // Función para manejar el clic en el nombre del perfil
+  const handleProfileClick = () => {
+    // Solo el padre (parent1) y la madre (parent2) pueden ir a setup
+    // Las hijas no pueden hacer nada al clicar
+    if (currentUser === 'parent1' || currentUser === 'parent2') {
+      setStep('setup');
+    }
+    // Si es child1 o child2, no hace nada
+  };
+
   if (step === 'setup') { 
     return (
       <SetupScreen 
@@ -512,7 +538,9 @@ const CoParentingApp = () => {
         children={children} 
         setChildren={setChildren} 
         setCurrentUser={setCurrentUser} 
-        setStep={setStep} 
+        setStep={setStep}
+        currentUser={currentUser}
+        saveAndContinue={saveAndContinue}
       />
     ); 
   }
@@ -520,6 +548,11 @@ const CoParentingApp = () => {
   const topBarColor = currentUser ? colors[currentUser] : '#3b82f6';
   const profileBorder = currentUser ? borderColors[currentUser] : '#ffffff';
   const displayName = currentUser === 'child1' ? children.child1 : currentUser === 'child2' ? children.child2 : currentUser === 'parent1' ? parents.parent1 : currentUser === 'parent2' ? parents.parent2 : 'Usuario';
+
+  // Determinar si mostrar botones según el perfil
+  const isParent1 = currentUser === 'parent1';
+  const isParent2 = currentUser === 'parent2';
+  const isChild = currentUser === 'child1' || currentUser === 'child2';
 
   return (
     <div className="max-w-md mx-auto h-screen flex flex-col bg-white">
@@ -529,15 +562,16 @@ const CoParentingApp = () => {
           <span className="font-bold text-sm">CoParenting</span>
         </div>
         <button 
-          onClick={() => { setStep('setup'); }} 
-          className="text-xs px-2 py-1 rounded border-2 font-medium" 
+          onClick={handleProfileClick} 
+          className={`text-xs px-2 py-1 rounded border-2 font-medium ${isChild ? 'cursor-default' : 'cursor-pointer'}`}
           style={{ borderColor: profileBorder, backgroundColor: 'white', color: topBarColor }}
         >
           {displayName}
         </button>
       </div>
       <div className="flex gap-1 p-2 border-b overflow-x-auto">
-        {!(currentUser === 'child1' || currentUser === 'child2') && (
+        {/* Vista Día: solo para padres (parent1 y parent2) */}
+        {(isParent1 || isParent2) && (
           <button 
             onClick={() => setCurrentView('daily')} 
             className={`px-3 py-1 text-xs rounded ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
@@ -557,7 +591,8 @@ const CoParentingApp = () => {
         >
           Mes
         </button>
-        {!(currentUser === 'child1' || currentUser === 'child2') && (
+        {/* Estadísticas y Guardar: SOLO para parent1 (padre) */}
+        {isParent1 && (
           <>
             <button 
               onClick={() => setCurrentView('stats')} 
