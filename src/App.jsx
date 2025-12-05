@@ -524,7 +524,7 @@ const CoParentingApp = () => {
     );
   };
 
-  // VISTA MES - Con turnos mejorados
+  // VISTA MES - Con turnos mejorados (compacta sin scroll)
   const MonthView = () => {
     const monthDates = getMonthDates(currentDate);
     const monthLabel = currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
@@ -538,83 +538,91 @@ const CoParentingApp = () => {
       const parsed = parseTurnoMadre(turnoStr);
       if (parsed.length === 0) return '';
       if (parsed.length === 1) return parsed[0].tipo || '';
-      // Doblete: Mañana/Tarde
       return parsed.map(t => t.tipo || '').filter(t => t).join('/');
     };
 
+    // Calcular número de filas del mes (semanas)
+    const numRows = Math.ceil(monthDates.length / 7);
+    // Altura de celda ajustada según filas (5 filas = más alto, 6 filas = más compacto)
+    const cellHeight = numRows <= 5 ? 58 : 48;
+
     return (
-      <div className="p-1" style={{ fontSize: 8 }}>
+      <div className="p-1 h-full flex flex-col" style={{ fontSize: 7 }}>
         <div className="flex items-center justify-between mb-1">
           <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={14} /></button>
           <div className="text-xs font-medium">{isChildUser ? `${childName}  ${capitalize(monthLabel)}` : capitalize(monthLabel)}</div>
           <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={14} /></button>
         </div>
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
-          {daysOfWeek.map(d => <div key={d} className="text-[7px] font-bold text-center">{d}</div>)}
-          {monthDates.map((date, idx) => {
-            const dateKey = date ? formatDate(date) : `empty-${idx}`;
-            if (!date) return <div key={dateKey} className="border rounded p-0.5 min-h-[70px] bg-gray-50" />;
-            
-            const turnoKey = getTurnoKey(date);
-            const turnoPadre = turnos[`${turnoKey}_padre`] || '';
-            const turnoMadre = turnos[`${turnoKey}_madre`] || '';
-            const { codigo: codP } = parseTurnoPadre(turnoPadre);
-            const turnoMadreCorto = getTurnoMadreCorto(turnoMadre);
+        <div className="flex-1">
+          <div className="grid h-full" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: `auto repeat(${numRows}, 1fr)`, gap: 1 }}>
+            {daysOfWeek.map(d => <div key={d} className="text-[6px] font-bold text-center">{d}</div>)}
+            {monthDates.map((date, idx) => {
+              const dateKey = date ? formatDate(date) : `empty-${idx}`;
+              if (!date) return <div key={dateKey} className="border rounded p-0.5 bg-gray-50" style={{ minHeight: cellHeight }} />;
+              
+              const turnoKey = getTurnoKey(date);
+              const turnoPadre = turnos[`${turnoKey}_padre`] || '';
+              const turnoMadre = turnos[`${turnoKey}_madre`] || '';
+              const { codigo: codP } = parseTurnoPadre(turnoPadre);
+              const turnoMadreCorto = getTurnoMadreCorto(turnoMadre);
 
-            return (
-              <div key={dateKey} className="border rounded p-0.5 min-h-[70px] flex flex-col text-[5px]">
-                {/* Número del día */}
-                <div className="font-bold text-[8px] mb-0.5">{date.getDate()}</div>
-                
-                {/* Turnos de los padres - altura fija */}
-                <div className="mb-0.5" style={{ minHeight: '18px' }}>
-                  {turnoPadre && (
-                    <div className="truncate" style={{ color: colors.parent1 }}>
-                      {parents.parent1} {codP}
-                    </div>
-                  )}
-                  {turnoMadreCorto && (
-                    <div className="truncate" style={{ color: '#065f46' }}>
-                      {parents.parent2} {turnoMadreCorto}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Asignaciones - siempre a la misma altura */}
-                <div className="flex-1 flex flex-col justify-end">
-                  {periods.map((period) => {
-                    if (isParentUser) {
-                      const c1k = getScheduleKey(date, 'child1', period);
-                      const c2k = getScheduleKey(date, 'child2', period);
-                      const c1a = schedule[c1k] === currentUser;
-                      const c2a = schedule[c2k] === currentUser;
-                      return (
-                        <div key={`${dateKey}_${period}`} className="flex gap-0.5 mb-0.5">
-                          <div className="flex-1 text-center rounded" style={{ backgroundColor: c1a ? colors.child1 : '#f3f4f6', fontSize: 5 }}>
-                            {c1a ? (children.child1 || 'H1')[0] : '-'}
-                          </div>
-                          <div className="flex-1 text-center rounded" style={{ backgroundColor: c2a ? colors.child2 : '#f3f4f6', fontSize: 5 }}>
-                            {c2a ? (children.child2 || 'H2')[0] : '-'}
-                          </div>
+              return (
+                <div key={dateKey} className="border rounded p-0.5 flex flex-col" style={{ minHeight: cellHeight, fontSize: 5 }}>
+                  {/* Número del día */}
+                  <div className="font-bold text-[7px]">{date.getDate()}</div>
+                  
+                  {/* Turnos de los padres - altura fija */}
+                  {isParentUser && (
+                    <div style={{ minHeight: '14px', lineHeight: '7px' }}>
+                      {turnoPadre && (
+                        <div className="truncate" style={{ color: colors.parent1 }}>
+                          {parents.parent1?.split(' ')[0]} {codP}
                         </div>
-                      );
-                    }
-                    if (isChildUser) {
-                      const ck = getScheduleKey(date, currentUser, period);
-                      const assigned = schedule[ck];
-                      let bg = '#f3f4f6';
-                      let txt = '-';
-                      if (assigned === 'parent1') { bg = colors.parent1; txt = 'P'; }
-                      else if (assigned === 'parent2') { bg = colors.parent2; txt = 'M'; }
-                      else if (assigned === 'other') { bg = colors.other; txt = 'O'; }
-                      return <div key={`${dateKey}_${period}`} className="text-center rounded mb-0.5" style={{ backgroundColor: bg, fontSize: 5 }}>{txt}</div>;
-                    }
-                    return null;
-                  })}
+                      )}
+                      {turnoMadreCorto && (
+                        <div className="truncate" style={{ color: '#065f46' }}>
+                          {parents.parent2?.split(' ')[0]} {turnoMadreCorto}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Asignaciones - siempre a la misma altura */}
+                  <div className="flex-1 flex flex-col justify-end">
+                    {periods.map((period) => {
+                      if (isParentUser) {
+                        const c1k = getScheduleKey(date, 'child1', period);
+                        const c2k = getScheduleKey(date, 'child2', period);
+                        const c1a = schedule[c1k] === currentUser;
+                        const c2a = schedule[c2k] === currentUser;
+                        return (
+                          <div key={`${dateKey}_${period}`} className="flex gap-0.5" style={{ marginBottom: 1 }}>
+                            <div className="flex-1 text-center rounded" style={{ backgroundColor: c1a ? colors.child1 : '#f3f4f6', fontSize: 4 }}>
+                              {c1a ? (children.child1 || 'H1')[0] : '-'}
+                            </div>
+                            <div className="flex-1 text-center rounded" style={{ backgroundColor: c2a ? colors.child2 : '#f3f4f6', fontSize: 4 }}>
+                              {c2a ? (children.child2 || 'H2')[0] : '-'}
+                            </div>
+                          </div>
+                        );
+                      }
+                      if (isChildUser) {
+                        const ck = getScheduleKey(date, currentUser, period);
+                        const assigned = schedule[ck];
+                        let bg = '#f3f4f6';
+                        let txt = '-';
+                        if (assigned === 'parent1') { bg = colors.parent1; txt = 'P'; }
+                        else if (assigned === 'parent2') { bg = colors.parent2; txt = 'M'; }
+                        else if (assigned === 'other') { bg = colors.other; txt = 'O'; }
+                        return <div key={`${dateKey}_${period}`} className="text-center rounded" style={{ backgroundColor: bg, fontSize: 4, marginBottom: 1 }}>{txt}</div>;
+                      }
+                      return null;
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     );
