@@ -105,10 +105,11 @@ const CoParentingApp = () => {
   };
 
   // Construir string de turno madre desde los 6 campos
+  // Guarda aunque no estén todos los campos completos
   const buildTurnoMadre = (t1tipo, t1entrada, t1salida, t2tipo, t2entrada, t2salida) => {
     const parts = [];
-    if (t1tipo && t1entrada && t1salida) parts.push(`${t1tipo}|${t1entrada}|${t1salida}`);
-    if (t2tipo && t2entrada && t2salida) parts.push(`${t2tipo}|${t2entrada}|${t2salida}`);
+    if (t1tipo || t1entrada || t1salida) parts.push(`${t1tipo || ''}|${t1entrada || ''}|${t1salida || ''}`);
+    if (t2tipo || t2entrada || t2salida) parts.push(`${t2tipo || ''}|${t2entrada || ''}|${t2salida || ''}`);
     return parts.join(';');
   };
 
@@ -205,18 +206,16 @@ const CoParentingApp = () => {
 
   // Componente selector de turno madre (6 desplegables en 2 filas)
   const TurnoMadreSelector = ({ fecha }) => {
-    const turnoKey = `${fecha}_madre`;
-    const turnoActual = turnos[turnoKey] || '';
+    const turnoActual = turnos[`${fecha}_madre`] || '';
     const parsed = parseTurnoMadre(turnoActual);
     const t1 = parsed[0] || { tipo: '', entrada: '', salida: '' };
     const t2 = parsed[1] || { tipo: '', entrada: '', salida: '' };
 
     const updateTurno = (field, value, turnoNum) => {
-      let newT1 = { ...t1 }; let newT2 = { ...t2 };
-      if (turnoNum === 1) newT1[field] = value;
-      else newT2[field] = value;
+      const newT1 = turnoNum === 1 ? { ...t1, [field]: value } : { ...t1 };
+      const newT2 = turnoNum === 2 ? { ...t2, [field]: value } : { ...t2 };
       const newTurno = buildTurnoMadre(newT1.tipo, newT1.entrada, newT1.salida, newT2.tipo, newT2.entrada, newT2.salida);
-      handleTurnoChange(fecha, 'madre', newTurno);
+      setTurnos(prev => ({ ...prev, [`${fecha}_madre`]: newTurno }));
     };
 
     const selectStyle = "w-full text-[7px] p-0 border rounded";
@@ -225,24 +224,24 @@ const CoParentingApp = () => {
     return (
       <div className="flex flex-col gap-0.5" style={{ backgroundColor: hasTurno ? colors.parent2 + '30' : 'white' }}>
         <div className="flex gap-0.5">
-          <select value={t1.tipo} onChange={e => updateTurno('tipo', e.target.value, 1)} className={selectStyle}>
+          <select value={t1.tipo || ''} onChange={e => updateTurno('tipo', e.target.value, 1)} className={selectStyle}>
             {tiposTurnoMadre.map(t => <option key={t || 'empty1'} value={t}>{t || '-'}</option>)}
           </select>
-          <select value={t1.entrada} onChange={e => updateTurno('entrada', e.target.value, 1)} className={selectStyle}>
+          <select value={t1.entrada || ''} onChange={e => updateTurno('entrada', e.target.value, 1)} className={selectStyle}>
             {horasEntradaMadre.map(h => <option key={h || 'e1'} value={h}>{h || '-'}</option>)}
           </select>
-          <select value={t1.salida} onChange={e => updateTurno('salida', e.target.value, 1)} className={selectStyle}>
+          <select value={t1.salida || ''} onChange={e => updateTurno('salida', e.target.value, 1)} className={selectStyle}>
             {horasSalidaMadre.map(h => <option key={h || 's1'} value={h}>{h || '-'}</option>)}
           </select>
         </div>
         <div className="flex gap-0.5">
-          <select value={t2.tipo} onChange={e => updateTurno('tipo', e.target.value, 2)} className={selectStyle}>
+          <select value={t2.tipo || ''} onChange={e => updateTurno('tipo', e.target.value, 2)} className={selectStyle}>
             {tiposTurnoMadre.map(t => <option key={t || 'empty2'} value={t}>{t || '-'}</option>)}
           </select>
-          <select value={t2.entrada} onChange={e => updateTurno('entrada', e.target.value, 2)} className={selectStyle}>
+          <select value={t2.entrada || ''} onChange={e => updateTurno('entrada', e.target.value, 2)} className={selectStyle}>
             {horasEntradaMadre.map(h => <option key={h || 'e2'} value={h}>{h || '-'}</option>)}
           </select>
-          <select value={t2.salida} onChange={e => updateTurno('salida', e.target.value, 2)} className={selectStyle}>
+          <select value={t2.salida || ''} onChange={e => updateTurno('salida', e.target.value, 2)} className={selectStyle}>
             {horasSalidaMadre.map(h => <option key={h || 's2'} value={h}>{h || '-'}</option>)}
           </select>
         </div>
