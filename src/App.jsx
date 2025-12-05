@@ -23,7 +23,6 @@ const CoParentingApp = () => {
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const monthsShort = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
-  // Opciones de turnos del padre
   const turnosPadre = [
     'E5DN (09:00-09:00)',
     'E5D (09:00-21:00)',
@@ -43,7 +42,6 @@ const CoParentingApp = () => {
     'VIAJE DÍA ENTERO'
   ];
 
-  // Opciones de turnos de la madre
   const turnosMadre = [
     'Mañ 09:00-14:00',
     'Mañ 09:00-15:00',
@@ -63,7 +61,6 @@ const CoParentingApp = () => {
     'VIAJE DÍA ENTERO'
   ];
 
-  // Truco: contador de toques en el título para desbloquear menú
   const [titleTapCount, setTitleTapCount] = useState(0);
 
   const handleTitleTap = () => {
@@ -83,6 +80,9 @@ const CoParentingApp = () => {
     const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
     return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
   };
+
+  // Capitalizar primera letra
+  const capitalize = (str) => str.charAt(0).toUpperCase() + str.slice(1);
 
   const saveAndContinue = (user) => {
     localStorage.setItem('coparenting_parents', JSON.stringify(parents));
@@ -142,10 +142,8 @@ const CoParentingApp = () => {
     setTurnos(prev => ({ ...prev, [key]: value }));
   }, []);
 
-  // Cargar asignaciones y turnos desde Supabase
   const loadScheduleFromSupabase = useCallback(async () => {
     try {
-      // Cargar asignaciones
       const { data: asignaciones, error } = await supabase.from('asignaciones').select('id, padre_id, hija_id, fecha, periodo, observaciones');
       if (error) { console.error('Error cargando asignaciones:', error); }
       
@@ -188,10 +186,8 @@ const CoParentingApp = () => {
         
         setSchedule(newSchedule);
         setNotes(newNotes);
-        console.log('Asignaciones cargadas:', Object.keys(newSchedule).length);
       }
 
-      // Cargar turnos
       const { data: turnosData, error: turnosError } = await supabase.from('turnos').select('*');
       if (turnosError) { console.error('Error cargando turnos:', turnosError); }
       
@@ -202,7 +198,6 @@ const CoParentingApp = () => {
           if (t.turno_madre) newTurnos[`${t.fecha}_madre`] = t.turno_madre;
         });
         setTurnos(newTurnos);
-        console.log('Turnos cargados:', Object.keys(newTurnos).length);
       }
     } catch (err) { console.error('Error inesperado al cargar:', err); }
   }, [parents, children]);
@@ -213,7 +208,6 @@ const CoParentingApp = () => {
 
   const saveScheduleInSupabase = async () => {
     try {
-      // Guardar asignaciones
       const keys = Object.keys(schedule).filter(k => schedule[k]);
       
       const { data: padresData } = await supabase.from('padres').select('id, nombre');
@@ -256,7 +250,6 @@ const CoParentingApp = () => {
         await supabase.from('asignaciones').insert(upserts);
       }
 
-      // Guardar turnos
       const turnoKeys = Object.keys(turnos).filter(k => turnos[k]);
       const turnosPorFecha = {};
       
@@ -288,42 +281,7 @@ const CoParentingApp = () => {
     }
   };
 
-  const DayPeriodCell = React.memo(({ scheduleKey, child, isDisabled }) => {
-    const childName = children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2');
-    const scheduleValue = schedule[scheduleKey] || '';
-    const noteValue = notes[scheduleKey] || '';
-    return (
-      <div className="border rounded p-1 flex-1">
-        <div className="text-[11px] font-medium mb-1" style={{ color: colors[child] }}>
-          {childName}
-        </div>
-        <select 
-          value={scheduleValue} 
-          onChange={(e) => handleScheduleChange(scheduleKey, e.target.value)} 
-          disabled={isDisabled} 
-          className="w-full text-[11px] p-1 border rounded" 
-          style={{ backgroundColor: scheduleValue ? colors[scheduleValue] + '40' : 'white' }}
-        >
-          <option value="">Seleccionar</option>
-          <option value="parent1">{parents.parent1 || 'Papá'}</option>
-          <option value="parent2">{parents.parent2 || 'Mamá'}</option>
-          {parents.other && <option value="other">{parents.other}</option>}
-        </select>
-        <textarea 
-          key={scheduleKey} 
-          placeholder="Obs..." 
-          defaultValue={noteValue} 
-          onBlur={(e) => handleNoteChange(scheduleKey, e.target.value)} 
-          onChange={(e) => { notes[scheduleKey] = e.target.value; }} 
-          disabled={isDisabled} 
-          className="w-full text-[10px] p-1 border rounded mt-1" 
-          style={{ minHeight: 28, resize: 'none' }} 
-        />
-      </div>
-    );
-  });
-
-  // VISTA DÍA - Con turnos de trabajo
+  // VISTA DÍA - Compacta sin scroll
   const DailyView = () => {
     const isChildUser = currentUser === 'child1' || currentUser === 'child2';
     const childrenToShow = isChildUser ? [currentUser] : ['child1', 'child2'];
@@ -335,26 +293,23 @@ const CoParentingApp = () => {
     const turnoMadre = turnos[`${turnoKey}_madre`] || '';
     
     return (
-      <div className="p-2 flex flex-col h-full" style={{ fontSize: 11 }}>
-        <div className="flex justify-between items-center mb-2">
-          <button onClick={() => setCurrentDate(d => addDays(d, -1))} className="px-3 py-1 border rounded text-sm">◀</button>
-          <div className="font-bold text-sm text-center">
-            {dayName} {dayNum} {monthName}
-          </div>
-          <button onClick={() => setCurrentDate(d => addDays(d, 1))} className="px-3 py-1 border rounded text-sm">▶</button>
+      <div className="p-1 flex flex-col h-full overflow-hidden" style={{ fontSize: 10 }}>
+        <div className="flex justify-between items-center mb-1">
+          <button onClick={() => setCurrentDate(d => addDays(d, -1))} className="px-2 py-0.5 border rounded text-xs">◀</button>
+          <div className="font-bold text-xs text-center">{dayName} {dayNum} {monthName}</div>
+          <button onClick={() => setCurrentDate(d => addDays(d, 1))} className="px-2 py-0.5 border rounded text-xs">▶</button>
         </div>
         
-        {/* Sección de turnos de trabajo */}
         {(currentUser === 'parent1' || currentUser === 'parent2') && (
-          <div className="mb-2 p-2 border rounded bg-gray-50">
-            <div className="text-xs font-bold mb-2">Turnos de trabajo</div>
-            <div className="flex gap-2">
+          <div className="mb-1 p-1 border rounded bg-gray-50">
+            <div className="text-[9px] font-bold mb-1">Turnos de trabajo</div>
+            <div className="flex gap-1">
               <div className="flex-1">
-                <div className="text-[10px] font-medium mb-1" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
+                <div className="text-[8px] font-medium" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
                 <select
                   value={turnoPadre}
                   onChange={(e) => handleTurnoChange(turnoKey, 'padre', e.target.value)}
-                  className="w-full text-[10px] p-1 border rounded"
+                  className="w-full text-[8px] p-0.5 border rounded"
                   style={{ backgroundColor: turnoPadre ? colors.parent1 + '30' : 'white' }}
                 >
                   <option value="">Sin turno</option>
@@ -362,11 +317,11 @@ const CoParentingApp = () => {
                 </select>
               </div>
               <div className="flex-1">
-                <div className="text-[10px] font-medium mb-1" style={{ color: colors.parent2 }}>{parents.parent2 || 'Madre'}</div>
+                <div className="text-[8px] font-medium" style={{ color: colors.parent2 }}>{parents.parent2 || 'Madre'}</div>
                 <select
                   value={turnoMadre}
                   onChange={(e) => handleTurnoChange(turnoKey, 'madre', e.target.value)}
-                  className="w-full text-[10px] p-1 border rounded"
+                  className="w-full text-[8px] p-0.5 border rounded"
                   style={{ backgroundColor: turnoMadre ? colors.parent2 + '30' : 'white' }}
                 >
                   <option value="">Sin turno</option>
@@ -377,14 +332,41 @@ const CoParentingApp = () => {
           </div>
         )}
         
-        <div className="flex-1 flex flex-col gap-2">
+        <div className="flex-1 flex flex-col gap-1 min-h-0">
           {periods.map((period) => (
-            <div key={period} className="flex-1 border rounded p-2 flex flex-col">
-              <div className="text-xs font-bold mb-1 uppercase">{period}</div>
-              <div className="flex gap-2 flex-1">
+            <div key={period} className="flex-1 border rounded p-1 flex flex-col min-h-0">
+              <div className="text-[9px] font-bold uppercase">{period}</div>
+              <div className="flex gap-1 flex-1 min-h-0">
                 {childrenToShow.map((child) => { 
-                  const sk = getScheduleKey(currentDate, child, period); 
-                  return (<DayPeriodCell key={sk} scheduleKey={sk} child={child} isDisabled={isChildUser} />); 
+                  const sk = getScheduleKey(currentDate, child, period);
+                  const childName = children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2');
+                  const scheduleValue = schedule[sk] || '';
+                  const noteValue = notes[sk] || '';
+                  return (
+                    <div key={sk} className="border rounded p-0.5 flex-1 flex flex-col min-h-0">
+                      <div className="text-[9px] font-medium" style={{ color: colors[child] }}>{childName}</div>
+                      <select 
+                        value={scheduleValue} 
+                        onChange={(e) => handleScheduleChange(sk, e.target.value)} 
+                        disabled={isChildUser} 
+                        className="w-full text-[9px] p-0.5 border rounded" 
+                        style={{ backgroundColor: scheduleValue ? colors[scheduleValue] + '40' : 'white' }}
+                      >
+                        <option value="">Seleccionar</option>
+                        <option value="parent1">{parents.parent1 || 'Papá'}</option>
+                        <option value="parent2">{parents.parent2 || 'Mamá'}</option>
+                        {parents.other && <option value="other">{parents.other}</option>}
+                      </select>
+                      <textarea 
+                        placeholder="Obs..." 
+                        defaultValue={noteValue} 
+                        onBlur={(e) => handleNoteChange(sk, e.target.value)} 
+                        disabled={isChildUser} 
+                        className="w-full text-[8px] p-0.5 border rounded mt-0.5 flex-1 min-h-0" 
+                        style={{ resize: 'none' }} 
+                      />
+                    </div>
+                  );
                 })}
               </div>
             </div>
@@ -394,97 +376,87 @@ const CoParentingApp = () => {
     );
   };
 
-  // Función para obtener abreviatura del turno (para mostrar en vista semana)
-  const getTurnoAbreviado = (turno) => {
-    if (!turno) return '';
-    // Extraer solo la primera parte antes del paréntesis o espacio con hora
-    const match = turno.match(/^([A-Za-zñÑ0-9.]+)/);
-    return match ? match[1] : turno.substring(0, 4);
-  };
-
-  const WeekCalendar = ({ childFilter = null, showChildName = false, showTurnos = false }) => {
+  // VISTA SEMANA - Unificada para padres e hijos
+  const WeekCalendar = ({ showTurnos = true }) => {
     const weekDates = getWeekDates(currentDate);
-    const firstMonth = weekDates[0].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-    const lastMonth = weekDates[6].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-    const monthLabel = firstMonth === lastMonth ? firstMonth : `${firstMonth} / ${lastMonth}`;
-    const childName = childFilter ? (children[childFilter] || (childFilter === 'child1' ? 'Hijo 1' : 'Hijo 2')).toUpperCase() : '';
     
     return (
       <div className="mb-1">
-        {showChildName && (
-          <div className="text-[9px] font-bold text-center mb-1" style={{ color: colors[childFilter] }}>{childName}</div>
-        )}
-        <div className="text-[9px] font-medium text-center mb-1">{monthLabel}</div>
-        <div className="grid" style={{ gridTemplateColumns: '30px repeat(7, 1fr)', gap: 1, fontSize: 8 }}>
+        <div className="grid" style={{ gridTemplateColumns: '50px repeat(7, 1fr)', gap: 1, fontSize: 7 }}>
           <div />
           {weekDates.map((d, i) => (
             <div key={formatDate(d)} className="text-center font-bold text-[8px]">{daysOfWeek[i]} {d.getDate()}</div>
           ))}
           
-          {/* Filas de turnos de trabajo (solo si showTurnos es true) */}
+          {/* Filas de turnos de trabajo - SIEMPRE visibles con información completa */}
           {showTurnos && (
             <>
-              <div className="font-bold text-[7px]" style={{ color: colors.parent1 }}>{(parents.parent1 || 'P')[0]}</div>
+              <div className="font-bold text-[8px] flex items-center" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
               {weekDates.map((d) => {
                 const turnoKey = getTurnoKey(d);
                 const turno = turnos[`${turnoKey}_padre`] || '';
                 return (
-                  <div key={`turno_padre_${formatDate(d)}`} className="text-[6px] text-center rounded" style={{ backgroundColor: turno ? colors.parent1 + '40' : '#f3f4f6', color: colors.parent1 }}>
-                    {getTurnoAbreviado(turno) || '-'}
+                  <div key={`turno_padre_${formatDate(d)}`} className="text-[7px] text-center rounded p-0.5" style={{ backgroundColor: turno ? colors.parent1 + '40' : '#f3f4f6', color: colors.parent1 }}>
+                    {turno || '-'}
                   </div>
                 );
               })}
-              <div className="font-bold text-[7px]" style={{ color: colors.parent2 }}>{(parents.parent2 || 'M')[0]}</div>
+              <div className="font-bold text-[8px] flex items-center" style={{ color: '#065f46' }}>{parents.parent2 || 'Madre'}</div>
               {weekDates.map((d) => {
                 const turnoKey = getTurnoKey(d);
                 const turno = turnos[`${turnoKey}_madre`] || '';
                 return (
-                  <div key={`turno_madre_${formatDate(d)}`} className="text-[6px] text-center rounded" style={{ backgroundColor: turno ? colors.parent2 + '40' : '#f3f4f6', color: '#065f46' }}>
-                    {getTurnoAbreviado(turno) || '-'}
+                  <div key={`turno_madre_${formatDate(d)}`} className="text-[7px] text-center rounded p-0.5" style={{ backgroundColor: turno ? colors.parent2 + '40' : '#f3f4f6', color: '#065f46' }}>
+                    {turno || '-'}
                   </div>
                 );
               })}
             </>
           )}
           
+          {/* Filas de Mañana, Tarde, Noche - palabra completa */}
           {periods.map((period) => (
             <React.Fragment key={period}>
-              <div className="font-bold text-[8px]">{period.substring(0, 3)}</div>
+              <div className="font-bold text-[8px] flex items-center">{period}</div>
               {weekDates.map((d) => { 
                 const date = d; 
+                const isParentUser = currentUser === 'parent1' || currentUser === 'parent2';
+                const isChildUser = currentUser === 'child1' || currentUser === 'child2';
+                
                 return (
-                  <div key={`${formatDate(date)}_${period}`} className="border rounded p-0.5 min-h-[24px] flex items-center justify-center">
-                    {(childFilter ? [childFilter] : ['child1', 'child2']).map((child) => { 
+                  <div key={`${formatDate(date)}_${period}`} className="border rounded p-0.5 min-h-[20px] flex items-center justify-center gap-0.5">
+                    {isParentUser && ['child1', 'child2'].map((child) => { 
                       const sk = getScheduleKey(date, child, period); 
                       const assigned = schedule[sk]; 
                       const obs = notes[sk] || ''; 
-                      if (currentUser === 'parent1' || currentUser === 'parent2') { 
-                        const isWithThisParent = assigned === currentUser; 
-                        const displayName = isWithThisParent ? (children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2')) : '-'; 
-                        return (
-                          <div 
-                            key={sk} 
-                            onClick={() => obs && setPopupObs(obs)} 
-                            className="text-[7px] text-center rounded px-0.5 cursor-pointer" 
-                            style={{ backgroundColor: isWithThisParent ? colors[child] : '#f3f4f6', color: isWithThisParent ? '#000' : '#666' }}
-                          >
-                            {displayName}{obs && <span className="ml-0.5">*</span>}
-                          </div>
-                        ); 
-                      } else { 
-                        const displayName = assigned ? (assigned === 'parent1' ? 'Papá' : assigned === 'parent2' ? 'Mamá' : parents.other || 'Otro') : '-'; 
-                        return (
-                          <div 
-                            key={sk} 
-                            onClick={() => obs && setPopupObs(obs)} 
-                            className="text-[7px] text-center rounded px-0.5 cursor-pointer" 
-                            style={{ backgroundColor: assigned ? colors[assigned] : '#f3f4f6', color: assigned ? '#000' : '#666' }}
-                          >
-                            {displayName}{obs && <span className="ml-0.5">*</span>}
-                          </div>
-                        ); 
-                      }
+                      const isWithThisParent = assigned === currentUser; 
+                      const displayName = isWithThisParent ? (children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2')) : '-'; 
+                      return (
+                        <div 
+                          key={sk} 
+                          onClick={() => obs && setPopupObs(obs)} 
+                          className="text-[9px] text-center rounded px-0.5 cursor-pointer font-medium" 
+                          style={{ backgroundColor: isWithThisParent ? colors[child] : '#f3f4f6', color: isWithThisParent ? '#000' : '#666' }}
+                        >
+                          {displayName}{obs && <span className="ml-0.5">*</span>}
+                        </div>
+                      ); 
                     })}
+                    {isChildUser && (() => {
+                      const sk = getScheduleKey(date, currentUser, period); 
+                      const assigned = schedule[sk]; 
+                      const obs = notes[sk] || ''; 
+                      const displayName = assigned ? (assigned === 'parent1' ? 'Papá' : assigned === 'parent2' ? 'Mamá' : parents.other || 'Otro') : '-'; 
+                      return (
+                        <div 
+                          onClick={() => obs && setPopupObs(obs)} 
+                          className="text-[9px] text-center rounded px-0.5 cursor-pointer font-medium" 
+                          style={{ backgroundColor: assigned ? colors[assigned] : '#f3f4f6', color: assigned ? '#000' : '#666' }}
+                        >
+                          {displayName}{obs && <span className="ml-0.5">*</span>}
+                        </div>
+                      ); 
+                    })()}
                   </div>
                 ); 
               })}
@@ -505,14 +477,14 @@ const CoParentingApp = () => {
     return (
       <div className="mb-2 border-t-2 pt-2">
         <div className="text-[9px] font-bold text-center mb-1">CALENDARIO GLOBAL</div>
-        <div className="grid" style={{ gridTemplateColumns: '30px repeat(7, 1fr)', gap: 1, fontSize: 8 }}>
+        <div className="grid" style={{ gridTemplateColumns: '50px repeat(7, 1fr)', gap: 1, fontSize: 7 }}>
           <div />
           {weekDates.map((d, i) => (
             <div key={formatDate(d)} className="text-center font-bold text-[8px]">{daysOfWeek[i]} {d.getDate()}</div>
           ))}
           {periods.map((period) => (
             <React.Fragment key={period}>
-              <div className="font-bold text-[8px]">{period.substring(0, 3)}</div>
+              <div className="font-bold text-[8px] flex items-center">{period}</div>
               {weekDates.map((d) => (
                 <div key={`${formatDate(d)}_${period}_global`} className="border rounded p-0.5 min-h-[28px]">
                   {caregivers.map(caregiver => { 
@@ -541,32 +513,43 @@ const CoParentingApp = () => {
 
   const WeekView = () => {
     const weekDates = getWeekDates(currentDate);
-    const firstMonth = weekDates[0].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-    const lastMonth = weekDates[6].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-    const monthLabel = firstMonth === lastMonth ? firstMonth : `${firstMonth} / ${lastMonth}`;
     const weekNumber = getWeekNumber(weekDates[0]);
     
+    // Obtener mes formateado con primera letra mayúscula
+    const firstMonth = weekDates[0].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    const lastMonth = weekDates[6].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    const monthLabel = firstMonth === lastMonth ? capitalize(firstMonth) : `${capitalize(firstMonth)} / ${capitalize(lastMonth)}`;
+    
+    // Para hijos: mismo formato que padres
     if (currentUser === 'child1' || currentUser === 'child2') {
-      const firstChild = currentUser;
-      const secondChild = currentUser === 'child1' ? 'child2' : 'child1';
+      const childName = children[currentUser] || 'Hijo';
+      const childColor = colors[currentUser];
       return (
         <div className="p-1" style={{ fontSize: 10 }}>
           <div className="flex items-center justify-between mb-1">
             <button onClick={() => setCurrentDate(d => addDays(d, -7))} className="p-1 text-[10px]"><ChevronLeft size={14} /></button>
-            <div className="text-xs font-medium">Semana {weekNumber}</div>
+            <div className="text-xs font-medium">
+              <span style={{ color: childColor }}>{childName.toUpperCase()}</span>
+              <span>  -  {monthLabel}  -  Semana {weekNumber}</span>
+            </div>
             <button onClick={() => setCurrentDate(d => addDays(d, 7))} className="p-1 text-[10px]"><ChevronRight size={14} /></button>
           </div>
-          <WeekCalendar childFilter={firstChild} showChildName={true} showTurnos={false} />
-          <WeekCalendar childFilter={secondChild} showChildName={true} showTurnos={false} />
+          <WeekCalendar showTurnos={true} />
         </div>
       );
     }
-    const parentName = currentUser === 'parent1' ? parents.parent1.toUpperCase() : parents.parent2.toUpperCase();
+    
+    // Para padres
+    const parentName = currentUser === 'parent1' ? parents.parent1 : parents.parent2;
+    const parentColor = colors[currentUser];
     return (
       <div className="p-1" style={{ fontSize: 10 }}>
         <div className="flex items-center justify-between mb-1">
           <button onClick={() => setCurrentDate(d => addDays(d, -7))} className="p-1 text-[10px]"><ChevronLeft size={14} /></button>
-          <div className="text-xs font-medium">{monthLabel} - Semana {weekNumber} - {parentName}</div>
+          <div className="text-xs font-medium">
+            <span style={{ color: parentColor }}>{parentName.toUpperCase()}</span>
+            <span>  -  {monthLabel}  -  Semana {weekNumber}</span>
+          </div>
           <button onClick={() => setCurrentDate(d => addDays(d, 7))} className="p-1 text-[10px]"><ChevronRight size={14} /></button>
         </div>
         <WeekCalendar showTurnos={true} />
@@ -587,7 +570,7 @@ const CoParentingApp = () => {
         <div className="flex items-center justify-between mb-1">
           <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1 text-[10px]"><ChevronLeft size={14} /></button>
           <div className="text-xs font-medium">
-            {isChildUser ? `${childName}  ${monthLabel}` : monthLabel}
+            {isChildUser ? `${childName}  ${capitalize(monthLabel)}` : capitalize(monthLabel)}
           </div>
           <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1 text-[10px]"><ChevronRight size={14} /></button>
         </div>
