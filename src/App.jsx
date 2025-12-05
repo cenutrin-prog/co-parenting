@@ -15,12 +15,53 @@ const CoParentingApp = () => {
   const borderColors = { parent1: '#CC4400', parent2: '#065f46', child1: '#C6A700', child2: '#00838F', other: '#C2185B' };
   const [schedule, setSchedule] = useState({});
   const [notes, setNotes] = useState({});
+  const [turnos, setTurnos] = useState({});
   const [currentView, setCurrentView] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [popupObs, setPopupObs] = useState(null);
   const periods = ['Mañana', 'Tarde', 'Noche'];
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const monthsShort = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+  // Opciones de turnos del padre
+  const turnosPadre = [
+    'E5DN (09:00-09:00)',
+    'E5D (09:00-21:00)',
+    'E5N (21:00-09:00)',
+    'E4DN (09:00-09:00)',
+    'GL (08:00-08:00)',
+    'E4D (09-21:00)',
+    'E4N (21:00-09:00)',
+    'C2 (09:00-21:00)',
+    'C4T (10:00-22:00)',
+    'C3D (08:15-20:15)',
+    'C3N (20:15-08:15)',
+    'F.O. (09:00-15:00)',
+    'CURSO (08:00-15:00)',
+    'CURSO (15:00-22:00)',
+    'CURSO (08:00-22:00)',
+    'VIAJE DÍA ENTERO'
+  ];
+
+  // Opciones de turnos de la madre
+  const turnosMadre = [
+    'Mañ 09:00-14:00',
+    'Mañ 09:00-15:00',
+    'Mañ 10:00-14:00',
+    'Mañ (10:00-15:00)',
+    'Tar 15:00-19:00',
+    'Tar 15:00-20:00',
+    'Tar 15:00-21:00',
+    'Tar 16:00-20:00',
+    'Tar 16:00-21:00',
+    'Tar 17:00-21:00',
+    'Tar 17:00-22:00',
+    'Tar 17:00-23:00',
+    'Tar 18:00-22:00',
+    'Tar 18:00-23:00',
+    'Tar 18:00-00:00',
+    'VIAJE DÍA ENTERO'
+  ];
 
   // Truco: contador de toques en el título para desbloquear menú
   const [titleTapCount, setTitleTapCount] = useState(0);
@@ -35,7 +76,6 @@ const CoParentingApp = () => {
     setTimeout(() => setTitleTapCount(0), 2000);
   };
 
-  // Función para obtener el número de semana del año
   const getWeekNumber = (date) => {
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     const dayNum = d.getUTCDay() || 7;
@@ -59,6 +99,7 @@ const CoParentingApp = () => {
   }, []);
 
   const getScheduleKey = useCallback((date, child, period) => `${formatDate(date)}_${child}_${period}`, [formatDate]);
+  const getTurnoKey = useCallback((date) => formatDate(date), [formatDate]);
 
   const getWeekDates = useCallback((date) => {
     const curr = new Date(date);
@@ -96,55 +137,73 @@ const CoParentingApp = () => {
     setSchedule(prev => { if (prev[key] === value) return prev; return { ...prev, [key]: value }; });
   }, []);
 
+  const handleTurnoChange = useCallback((fecha, quien, value) => {
+    const key = `${fecha}_${quien}`;
+    setTurnos(prev => ({ ...prev, [key]: value }));
+  }, []);
+
+  // Cargar asignaciones y turnos desde Supabase
   const loadScheduleFromSupabase = useCallback(async () => {
     try {
+      // Cargar asignaciones
       const { data: asignaciones, error } = await supabase.from('asignaciones').select('id, padre_id, hija_id, fecha, periodo, observaciones');
-      if (error) { console.error('Error cargando asignaciones:', error); return; }
-      if (!asignaciones || asignaciones.length === 0) { console.log('No hay asignaciones guardadas'); return; }
-      console.log('Asignaciones recibidas de Supabase:', asignaciones.length);
+      if (error) { console.error('Error cargando asignaciones:', error); }
       
-      const padreIds = [...new Set(asignaciones.map(a => a.padre_id))];
-      const hijaIds = [...new Set(asignaciones.map(a => a.hija_id))];
-      const { data: padresData } = await supabase.from('padres').select('id, nombre').in('id', padreIds);
-      const { data: hijasData } = await supabase.from('hijas').select('id, nombre').in('id', hijaIds);
-      
-      const padresMap = {};
-      const hijasMap = {};
-      padresData?.forEach(p => { padresMap[p.id] = p.nombre; });
-      hijasData?.forEach(h => { hijasMap[h.id] = h.nombre; });
-      
-      const newSchedule = {};
-      const newNotes = {};
-      
-      asignaciones.forEach(asig => {
-        const padreNombre = padresMap[asig.padre_id];
-        const hijaNombre = hijasMap[asig.hija_id];
-        if (!padreNombre || !hijaNombre) { console.warn('Nombre no encontrado para:', asig); return; }
+      if (asignaciones && asignaciones.length > 0) {
+        const padreIds = [...new Set(asignaciones.map(a => a.padre_id))];
+        const hijaIds = [...new Set(asignaciones.map(a => a.hija_id))];
+        const { data: padresData } = await supabase.from('padres').select('id, nombre').in('id', padreIds);
+        const { data: hijasData } = await supabase.from('hijas').select('id, nombre').in('id', hijaIds);
         
-        let parentKey = null;
-        if (parents.parent1 === padreNombre) parentKey = 'parent1';
-        else if (parents.parent2 === padreNombre) parentKey = 'parent2';
-        else if (parents.other === padreNombre) parentKey = 'other';
+        const padresMap = {};
+        const hijasMap = {};
+        padresData?.forEach(p => { padresMap[p.id] = p.nombre; });
+        hijasData?.forEach(h => { hijasMap[h.id] = h.nombre; });
         
-        let childKey = null;
-        if (children.child1 === hijaNombre) childKey = 'child1';
-        else if (children.child2 === hijaNombre) childKey = 'child2';
+        const newSchedule = {};
+        const newNotes = {};
         
-        if (parentKey && childKey) {
-          const scheduleKey = `${asig.fecha}_${childKey}_${asig.periodo}`;
-          newSchedule[scheduleKey] = parentKey;
-          if (asig.observaciones) {
-            newNotes[scheduleKey] = asig.observaciones;
+        asignaciones.forEach(asig => {
+          const padreNombre = padresMap[asig.padre_id];
+          const hijaNombre = hijasMap[asig.hija_id];
+          if (!padreNombre || !hijaNombre) return;
+          
+          let parentKey = null;
+          if (parents.parent1 === padreNombre) parentKey = 'parent1';
+          else if (parents.parent2 === padreNombre) parentKey = 'parent2';
+          else if (parents.other === padreNombre) parentKey = 'other';
+          
+          let childKey = null;
+          if (children.child1 === hijaNombre) childKey = 'child1';
+          else if (children.child2 === hijaNombre) childKey = 'child2';
+          
+          if (parentKey && childKey) {
+            const scheduleKey = `${asig.fecha}_${childKey}_${asig.periodo}`;
+            newSchedule[scheduleKey] = parentKey;
+            if (asig.observaciones) {
+              newNotes[scheduleKey] = asig.observaciones;
+            }
           }
-        } else {
-          console.warn('No se pudo mapear:', { padreNombre, hijaNombre, asig });
-        }
-      });
+        });
+        
+        setSchedule(newSchedule);
+        setNotes(newNotes);
+        console.log('Asignaciones cargadas:', Object.keys(newSchedule).length);
+      }
+
+      // Cargar turnos
+      const { data: turnosData, error: turnosError } = await supabase.from('turnos').select('*');
+      if (turnosError) { console.error('Error cargando turnos:', turnosError); }
       
-      setSchedule(newSchedule);
-      setNotes(newNotes);
-      console.log('Asignaciones cargadas correctamente:', Object.keys(newSchedule).length);
-      console.log('Observaciones cargadas:', Object.keys(newNotes).length);
+      if (turnosData && turnosData.length > 0) {
+        const newTurnos = {};
+        turnosData.forEach(t => {
+          if (t.turno_padre) newTurnos[`${t.fecha}_padre`] = t.turno_padre;
+          if (t.turno_madre) newTurnos[`${t.fecha}_madre`] = t.turno_madre;
+        });
+        setTurnos(newTurnos);
+        console.log('Turnos cargados:', Object.keys(newTurnos).length);
+      }
     } catch (err) { console.error('Error inesperado al cargar:', err); }
   }, [parents, children]);
 
@@ -154,8 +213,8 @@ const CoParentingApp = () => {
 
   const saveScheduleInSupabase = async () => {
     try {
+      // Guardar asignaciones
       const keys = Object.keys(schedule).filter(k => schedule[k]);
-      if (keys.length === 0) { alert('No hay asignaciones para guardar.'); return; }
       
       const { data: padresData } = await supabase.from('padres').select('id, nombre');
       const { data: hijasData } = await supabase.from('hijas').select('id, nombre');
@@ -182,38 +241,47 @@ const CoParentingApp = () => {
         const padreId = padresMap[padreNombre];
         const hijaId = hijasMap[hijaNombre];
         
-        if (!padreId) { console.warn('Padre no encontrado:', padreNombre); continue; }
-        if (!hijaId) { console.warn('Hija no encontrada:', hijaNombre); continue; }
+        if (!padreId || !hijaId) continue;
         
         const observaciones = notes[k] || null;
         
-        upserts.push({ 
-          padre_id: padreId, 
-          hija_id: hijaId, 
-          fecha, 
-          periodo,
-          observaciones
-        });
+        upserts.push({ padre_id: padreId, hija_id: hijaId, fecha, periodo, observaciones });
       }
       
-      if (upserts.length === 0) { 
-        alert('No se generaron datos para guardar (comprueba que padres/hijas existen en la base de datos).'); 
-        return; 
+      if (upserts.length > 0) {
+        const fechasUnicas = [...new Set(upserts.map(u => u.fecha))];
+        for (const fecha of fechasUnicas) {
+          await supabase.from('asignaciones').delete().eq('fecha', fecha);
+        }
+        await supabase.from('asignaciones').insert(upserts);
+      }
+
+      // Guardar turnos
+      const turnoKeys = Object.keys(turnos).filter(k => turnos[k]);
+      const turnosPorFecha = {};
+      
+      turnoKeys.forEach(k => {
+        const [fecha, quien] = k.split('_');
+        if (!turnosPorFecha[fecha]) turnosPorFecha[fecha] = {};
+        if (quien === 'padre') turnosPorFecha[fecha].turno_padre = turnos[k];
+        if (quien === 'madre') turnosPorFecha[fecha].turno_madre = turnos[k];
+      });
+      
+      const turnoUpserts = Object.entries(turnosPorFecha).map(([fecha, data]) => ({
+        fecha,
+        turno_padre: data.turno_padre || null,
+        turno_madre: data.turno_madre || null
+      }));
+      
+      if (turnoUpserts.length > 0) {
+        const fechasTurnos = turnoUpserts.map(t => t.fecha);
+        for (const fecha of fechasTurnos) {
+          await supabase.from('turnos').delete().eq('fecha', fecha);
+        }
+        await supabase.from('turnos').insert(turnoUpserts);
       }
       
-      const fechasUnicas = [...new Set(upserts.map(u => u.fecha))];
-      for (const fecha of fechasUnicas) {
-        await supabase.from('asignaciones').delete().eq('fecha', fecha);
-      }
-      
-      const { data, error } = await supabase.from('asignaciones').insert(upserts);
-      
-      if (error) { 
-        console.error('Error guardando asignaciones:', error); 
-        alert('Error guardando en Supabase: ' + (error.message || JSON.stringify(error))); 
-      } else { 
-        alert('Asignaciones y observaciones guardadas correctamente.'); 
-      }
+      alert('Asignaciones y turnos guardados correctamente.');
     } catch (err) { 
       console.error(err); 
       alert('Error inesperado al guardar: ' + (err.message || err)); 
@@ -255,13 +323,16 @@ const CoParentingApp = () => {
     );
   });
 
-  // VISTA DÍA - Ajustada para no hacer scroll y mostrar mes
+  // VISTA DÍA - Con turnos de trabajo
   const DailyView = () => {
     const isChildUser = currentUser === 'child1' || currentUser === 'child2';
     const childrenToShow = isChildUser ? [currentUser] : ['child1', 'child2'];
     const dayName = daysOfWeek[currentDate.getDay() === 0 ? 6 : currentDate.getDay() - 1];
     const dayNum = currentDate.getDate();
     const monthName = monthsShort[currentDate.getMonth()];
+    const turnoKey = getTurnoKey(currentDate);
+    const turnoPadre = turnos[`${turnoKey}_padre`] || '';
+    const turnoMadre = turnos[`${turnoKey}_madre`] || '';
     
     return (
       <div className="p-2 flex flex-col h-full" style={{ fontSize: 11 }}>
@@ -272,6 +343,40 @@ const CoParentingApp = () => {
           </div>
           <button onClick={() => setCurrentDate(d => addDays(d, 1))} className="px-3 py-1 border rounded text-sm">▶</button>
         </div>
+        
+        {/* Sección de turnos de trabajo */}
+        {(currentUser === 'parent1' || currentUser === 'parent2') && (
+          <div className="mb-2 p-2 border rounded bg-gray-50">
+            <div className="text-xs font-bold mb-2">Turnos de trabajo</div>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <div className="text-[10px] font-medium mb-1" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
+                <select
+                  value={turnoPadre}
+                  onChange={(e) => handleTurnoChange(turnoKey, 'padre', e.target.value)}
+                  className="w-full text-[10px] p-1 border rounded"
+                  style={{ backgroundColor: turnoPadre ? colors.parent1 + '30' : 'white' }}
+                >
+                  <option value="">Sin turno</option>
+                  {turnosPadre.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="flex-1">
+                <div className="text-[10px] font-medium mb-1" style={{ color: colors.parent2 }}>{parents.parent2 || 'Madre'}</div>
+                <select
+                  value={turnoMadre}
+                  onChange={(e) => handleTurnoChange(turnoKey, 'madre', e.target.value)}
+                  className="w-full text-[10px] p-1 border rounded"
+                  style={{ backgroundColor: turnoMadre ? colors.parent2 + '30' : 'white' }}
+                >
+                  <option value="">Sin turno</option>
+                  {turnosMadre.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="flex-1 flex flex-col gap-2">
           {periods.map((period) => (
             <div key={period} className="flex-1 border rounded p-2 flex flex-col">
@@ -289,12 +394,21 @@ const CoParentingApp = () => {
     );
   };
 
-  const WeekCalendar = ({ childFilter = null, showChildName = false }) => {
+  // Función para obtener abreviatura del turno (para mostrar en vista semana)
+  const getTurnoAbreviado = (turno) => {
+    if (!turno) return '';
+    // Extraer solo la primera parte antes del paréntesis o espacio con hora
+    const match = turno.match(/^([A-Za-zñÑ0-9.]+)/);
+    return match ? match[1] : turno.substring(0, 4);
+  };
+
+  const WeekCalendar = ({ childFilter = null, showChildName = false, showTurnos = false }) => {
     const weekDates = getWeekDates(currentDate);
     const firstMonth = weekDates[0].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
     const lastMonth = weekDates[6].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
     const monthLabel = firstMonth === lastMonth ? firstMonth : `${firstMonth} / ${lastMonth}`;
     const childName = childFilter ? (children[childFilter] || (childFilter === 'child1' ? 'Hijo 1' : 'Hijo 2')).toUpperCase() : '';
+    
     return (
       <div className="mb-1">
         {showChildName && (
@@ -306,6 +420,33 @@ const CoParentingApp = () => {
           {weekDates.map((d, i) => (
             <div key={formatDate(d)} className="text-center font-bold text-[8px]">{daysOfWeek[i]} {d.getDate()}</div>
           ))}
+          
+          {/* Filas de turnos de trabajo (solo si showTurnos es true) */}
+          {showTurnos && (
+            <>
+              <div className="font-bold text-[7px]" style={{ color: colors.parent1 }}>{(parents.parent1 || 'P')[0]}</div>
+              {weekDates.map((d) => {
+                const turnoKey = getTurnoKey(d);
+                const turno = turnos[`${turnoKey}_padre`] || '';
+                return (
+                  <div key={`turno_padre_${formatDate(d)}`} className="text-[6px] text-center rounded" style={{ backgroundColor: turno ? colors.parent1 + '40' : '#f3f4f6', color: colors.parent1 }}>
+                    {getTurnoAbreviado(turno) || '-'}
+                  </div>
+                );
+              })}
+              <div className="font-bold text-[7px]" style={{ color: colors.parent2 }}>{(parents.parent2 || 'M')[0]}</div>
+              {weekDates.map((d) => {
+                const turnoKey = getTurnoKey(d);
+                const turno = turnos[`${turnoKey}_madre`] || '';
+                return (
+                  <div key={`turno_madre_${formatDate(d)}`} className="text-[6px] text-center rounded" style={{ backgroundColor: turno ? colors.parent2 + '40' : '#f3f4f6', color: '#065f46' }}>
+                    {getTurnoAbreviado(turno) || '-'}
+                  </div>
+                );
+              })}
+            </>
+          )}
+          
           {periods.map((period) => (
             <React.Fragment key={period}>
               <div className="font-bold text-[8px]">{period.substring(0, 3)}</div>
@@ -398,7 +539,6 @@ const CoParentingApp = () => {
     );
   };
 
-  // VISTA SEMANA - Con número de semana del año
   const WeekView = () => {
     const weekDates = getWeekDates(currentDate);
     const firstMonth = weekDates[0].toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
@@ -416,8 +556,8 @@ const CoParentingApp = () => {
             <div className="text-xs font-medium">Semana {weekNumber}</div>
             <button onClick={() => setCurrentDate(d => addDays(d, 7))} className="p-1 text-[10px]"><ChevronRight size={14} /></button>
           </div>
-          <WeekCalendar childFilter={firstChild} showChildName={true} />
-          <WeekCalendar childFilter={secondChild} showChildName={true} />
+          <WeekCalendar childFilter={firstChild} showChildName={true} showTurnos={false} />
+          <WeekCalendar childFilter={secondChild} showChildName={true} showTurnos={false} />
         </div>
       );
     }
@@ -429,13 +569,12 @@ const CoParentingApp = () => {
           <div className="text-xs font-medium">{monthLabel} - Semana {weekNumber} - {parentName}</div>
           <button onClick={() => setCurrentDate(d => addDays(d, 7))} className="p-1 text-[10px]"><ChevronRight size={14} /></button>
         </div>
-        <WeekCalendar />
+        <WeekCalendar showTurnos={true} />
         <GlobalWeekCalendar />
       </div>
     );
   };
 
-  // VISTA MES - Con nombre del hijo en mayúsculas para perfil hijos
   const MonthView = () => {
     const monthDates = getMonthDates(currentDate);
     const monthLabel = currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
@@ -533,14 +672,10 @@ const CoParentingApp = () => {
     );
   };
 
-  // Función para manejar el clic en el nombre del perfil
   const handleProfileClick = () => {
-    // Solo el padre (parent1) y la madre (parent2) pueden ir a setup
-    // Las hijas no pueden hacer nada al clicar
     if (currentUser === 'parent1' || currentUser === 'parent2') {
       setStep('setup');
     }
-    // Si es child1 o child2, no hace nada
   };
 
   if (step === 'setup') { 
@@ -562,7 +697,6 @@ const CoParentingApp = () => {
   const profileBorder = currentUser ? borderColors[currentUser] : '#ffffff';
   const displayName = currentUser === 'child1' ? children.child1 : currentUser === 'child2' ? children.child2 : currentUser === 'parent1' ? parents.parent1 : currentUser === 'parent2' ? parents.parent2 : 'Usuario';
 
-  // Determinar si mostrar botones según el perfil
   const isParent1 = currentUser === 'parent1';
   const isParent2 = currentUser === 'parent2';
   const isChild = currentUser === 'child1' || currentUser === 'child2';
@@ -592,7 +726,6 @@ const CoParentingApp = () => {
         </button>
       </div>
       <div className="flex gap-1 p-2 border-b overflow-x-auto">
-        {/* Vista Día: solo para padres (parent1 y parent2) */}
         {(isParent1 || isParent2) && (
           <button 
             onClick={() => setCurrentView('daily')} 
@@ -613,7 +746,6 @@ const CoParentingApp = () => {
         >
           Mes
         </button>
-        {/* Estadísticas y Guardar: SOLO para parent1 (padre) */}
         {isParent1 && (
           <>
             <button 
@@ -663,4 +795,3 @@ const CoParentingApp = () => {
 };
 
 export default CoParentingApp;
-
