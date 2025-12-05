@@ -1,6 +1,21 @@
 import React from 'react';
 
 const SetupScreen = ({ parents, setParents, children, setChildren, setCurrentUser, setStep, currentUser, saveAndContinue }) => {
+  const [tapCount, setTapCount] = React.useState(0);
+  const [showFullMenu, setShowFullMenu] = React.useState(false);
+
+  // Truco: pulsar 3 veces en el título para ver menú completo
+  const handleTitleTap = () => {
+    const newCount = tapCount + 1;
+    setTapCount(newCount);
+    if (newCount >= 3) {
+      setShowFullMenu(true);
+      setTapCount(0);
+    }
+    // Reset después de 2 segundos si no llega a 3
+    setTimeout(() => setTapCount(0), 2000);
+  };
+
   const handleParentChange = (field, value) => {
     setParents(prev => ({ ...prev, [field]: value }));
   };
@@ -10,37 +25,44 @@ const SetupScreen = ({ parents, setParents, children, setChildren, setCurrentUse
   };
 
   const handleSaveAndContinue = (user) => {
-    // Guardar nombres en localStorage
     localStorage.setItem('coparenting_parents', JSON.stringify(parents));
     localStorage.setItem('coparenting_children', JSON.stringify(children));
     localStorage.setItem('coparenting_currentUser', user);
-    // Establecer usuario actual y pasar a la pantalla principal
     setCurrentUser(user);
     setStep('main');
   };
 
-  // Colores apagados (pastel) para los inputs
   const inputColors = {
-    parent1: '#FFE4CC', // Naranja apagado
-    parent2: '#D4F4DD', // Verde apagado
-    child1: '#FFF9C4',  // Amarillo apagado
-    child2: '#D0F4F7',  // Cian apagado
-    other: '#FFE0F0'    // Rosa apagado
+    parent1: '#FFE4CC',
+    parent2: '#D4F4DD',
+    child1: '#FFF9C4',
+    child2: '#D0F4F7',
+    other: '#FFE0F0'
   };
 
-  // Colores vivos para los botones
   const buttonColors = {
-    parent1: '#FF8C42', // Naranja vivo
-    parent2: '#86efac', // Verde vivo
-    child1: '#FDD835',  // Amarillo vivo
-    child2: '#00BCD4'   // Cian vivo
+    parent1: '#FF8C42',
+    parent2: '#86efac',
+    child1: '#FDD835',
+    child2: '#00BCD4'
   };
+
+  // Título clickeable (para el truco de 3 toques)
+  const Title = () => (
+    <h1 
+      onClick={handleTitleTap}
+      className="text-2xl font-bold text-center mb-8 text-blue-600 cursor-pointer select-none"
+    >
+      CoParenting
+    </h1>
+  );
 
   // VISTA PARA PADRE (parent1): muestra todo (inputs + todos los botones)
-  if (!currentUser || currentUser === 'parent1') {
+  // También se muestra si showFullMenu está activo (truco de 3 toques)
+  if (!currentUser || currentUser === 'parent1' || showFullMenu) {
     return (
       <div className="p-4 max-w-md mx-auto bg-white min-h-screen flex flex-col justify-center">
-        <h1 className="text-2xl font-bold text-center mb-8 text-blue-600">CoParenting</h1>
+        <Title />
         
         <div className="space-y-3">
           <input
@@ -138,7 +160,7 @@ const SetupScreen = ({ parents, setParents, children, setChildren, setCurrentUse
   if (currentUser === 'parent2') {
     return (
       <div className="p-4 max-w-md mx-auto bg-white min-h-screen flex flex-col justify-center">
-        <h1 className="text-2xl font-bold text-center mb-8 text-blue-600">CoParenting</h1>
+        <Title />
         
         <div className="mt-4 flex flex-col gap-2">
           {parents.parent2 && (
@@ -179,7 +201,7 @@ const SetupScreen = ({ parents, setParents, children, setChildren, setCurrentUse
   if (currentUser === 'child1' || currentUser === 'child2') {
     return (
       <div className="p-4 max-w-md mx-auto bg-white min-h-screen flex flex-col justify-center">
-        <h1 className="text-2xl font-bold text-center mb-8 text-blue-600">CoParenting</h1>
+        <Title />
         
         <div className="mt-4 flex flex-col gap-2">
           {children.child1 && (
@@ -206,7 +228,6 @@ const SetupScreen = ({ parents, setParents, children, setChildren, setCurrentUse
     );
   }
 
-  // Fallback por si acaso
   return null;
 };
 
