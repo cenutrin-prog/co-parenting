@@ -164,44 +164,98 @@ const CoParentingApp = () => {
 
   const saveScheduleInSupabase = async () => {
     try {
+      // Guardar asignaciones
       const keys = Object.keys(schedule).filter(k => schedule[k]);
+      console.log('Asignaciones a guardar:', keys.length);
+      
       const { data: padresData } = await supabase.from('padres').select('id, nombre');
       const { data: hijasData } = await supabase.from('hijas').select('id, nombre');
       const padresMap = {}; const hijasMap = {};
       padresData?.forEach(p => { padresMap[p.nombre] = p.id; });
       hijasData?.forEach(h => { hijasMap[h.nombre] = h.id; });
+      
       const upserts = [];
       for (const k of keys) {
-        const parts = k.split('_'); if (parts.length < 3) continue;
-        const fecha = parts[0]; const childKey = parts[1]; const periodo = parts.slice(2).join('_');
-        const parentKey = schedule[k]; const padreNombre = parents[parentKey]; const hijaNombre = children[childKey];
-        if (!padreNombre || !hijaNombre) continue;
-        const padreId = padresMap[padreNombre]; const hijaId = hijasMap[hijaNombre];
-        if (!padreId || !hijaId) continue;
+        const parts = k.split('_'); 
+        if (parts.length < 3) continue;
+        const fecha = parts[0]; 
+        const childKey = parts[1]; 
+        const periodo = parts.slice(2).join('_');
+        const parentKey = schedule[k]; 
+        const padreNombre = parents[parentKey]; 
+        const hijaNombre = children[childKey];
+        
+        if (!padreNombre || !hijaNombre) {
+          console.log('Falta padre o hija:', { parentKey, childKey, padreNombre, hijaNombre });
+          continue;
+        }
+        
+        const padreId = padresMap[padreNombre]; 
+        const hijaId = hijasMap[hijaNombre];
+        
+        if (!padreId || !hijaId) {
+          console.log('No se encontró ID:', { padreNombre, hijaNombre, padreId, hijaId });
+          continue;
+        }
+        
         upserts.push({ padre_id: padreId, hija_id: hijaId, fecha, periodo, observaciones: notes[k] || null });
       }
+      
+      console.log('Upserts preparados:', upserts.length);
+      
       if (upserts.length > 0) {
+        // Agrupar por fecha para borrar y luego insertar
         const fechasUnicas = [...new Set(upserts.map(u => u.fecha))];
-        for (const fecha of fechasUnicas) await supabase.from('asignaciones').delete().eq('fecha', fecha);
-        await supabase.from('asignaciones').insert(upserts);
+        console.log('Fechas a actualizar:', fechasUnicas);
+        
+        for (const fecha of fechasUnicas) {
+          const { error: deleteError } = await supabase.from('asignaciones').delete().eq('fecha', fecha);
+          if (deleteError) console.error('Error borrando fecha', fecha, deleteError);
+        }
+        
+        const { data: insertData, error: insertError } = await supabase.from('asignaciones').insert(upserts);
+        if (insertError) {
+          console.error('Error insertando asignaciones:', insertError);
+          alert('Error al guardar asignaciones: ' + insertError.message);
+          return;
+        }
+        console.log('Asignaciones insertadas correctamente');
       }
+      
+      // Guardar turnos
       const turnoKeys = Object.keys(turnos).filter(k => turnos[k]);
       const turnosPorFecha = {};
       turnoKeys.forEach(k => {
-        const parts = k.split('_'); const fecha = parts[0]; const quien = parts[1];
+        const parts = k.split('_'); 
+        const fecha = parts[0]; 
+        const quien = parts[1];
         if (!turnosPorFecha[fecha]) turnosPorFecha[fecha] = {};
         if (quien === 'padre') turnosPorFecha[fecha].turno_padre = turnos[k];
         if (quien === 'madre') turnosPorFecha[fecha].turno_madre = turnos[k];
       });
+      
       const turnoUpserts = Object.entries(turnosPorFecha).map(([fecha, data]) => ({
         fecha, turno_padre: data.turno_padre || null, turno_madre: data.turno_madre || null
       }));
+      
       if (turnoUpserts.length > 0) {
-        for (const t of turnoUpserts) await supabase.from('turnos').delete().eq('fecha', t.fecha);
-        await supabase.from('turnos').insert(turnoUpserts);
+        for (const t of turnoUpserts) {
+          const { error: deleteError } = await supabase.from('turnos').delete().eq('fecha', t.fecha);
+          if (deleteError) console.error('Error borrando turno', t.fecha, deleteError);
+        }
+        const { error: insertError } = await supabase.from('turnos').insert(turnoUpserts);
+        if (insertError) {
+          console.error('Error insertando turnos:', insertError);
+          alert('Error al guardar turnos: ' + insertError.message);
+          return;
+        }
       }
-      alert('Guardado correctamente.');
-    } catch (err) { console.error(err); alert('Error al guardar: ' + (err.message || err)); }
+      
+      alert('Guardado correctamente. Asignaciones: ' + upserts.length + ', Turnos: ' + turnoUpserts.length);
+    } catch (err) { 
+      console.error('Error inesperado:', err); 
+      alert('Error al guardar: ' + (err.message || err)); 
+    }
   };
 
   // Componente selector de turno madre (6 desplegables en 2 filas)
