@@ -13,6 +13,8 @@ const SetupScreen = ({ parents, setParents, children, setChildren, setCurrentUse
     // Guardar nombres en localStorage
     localStorage.setItem('coparenting_parents', JSON.stringify(parents));
     localStorage.setItem('coparenting_children', JSON.stringify(children));
+    // NUEVO: Guardar el usuario actual en localStorage
+    localStorage.setItem('coparenting_currentUser', user);
     // Establecer usuario actual y pasar a la pantalla principal
     setCurrentUser(user);
     setStep('main');
