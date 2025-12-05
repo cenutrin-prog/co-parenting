@@ -118,33 +118,63 @@ const CoParentingApp = () => {
       const { data: asignaciones, error } = await supabase.from('asignaciones').select('id, padre_id, hija_id, fecha, periodo, observaciones');
       if (error) console.error('Error cargando asignaciones:', error);
       
+      console.log('Asignaciones cargadas de BD:', asignaciones?.length || 0);
+      console.log('Parents en app:', parents);
+      console.log('Children en app:', children);
+      
       if (asignaciones && asignaciones.length > 0) {
         const padreIds = [...new Set(asignaciones.map(a => a.padre_id))];
         const hijaIds = [...new Set(asignaciones.map(a => a.hija_id))];
         const { data: padresData } = await supabase.from('padres').select('id, nombre').in('id', padreIds);
         const { data: hijasData } = await supabase.from('hijas').select('id, nombre').in('id', hijaIds);
+        
+        console.log('Padres en BD:', padresData);
+        console.log('Hijas en BD:', hijasData);
+        
         const padresMap = {}; const hijasMap = {};
         padresData?.forEach(p => { padresMap[p.id] = p.nombre; });
         hijasData?.forEach(h => { hijasMap[h.id] = h.nombre; });
         const newSchedule = {}; const newNotes = {};
+        
         asignaciones.forEach(asig => {
-          const padreNombre = padresMap[asig.padre_id]; const hijaNombre = hijasMap[asig.hija_id];
-          if (!padreNombre || !hijaNombre) return;
+          const padreNombre = padresMap[asig.padre_id]; 
+          const hijaNombre = hijasMap[asig.hija_id];
+          if (!padreNombre || !hijaNombre) {
+            console.log('Asignación sin mapeo:', asig, { padreNombre, hijaNombre });
+            return;
+          }
+          
           let parentKey = null;
           if (parents.parent1 === padreNombre) parentKey = 'parent1';
           else if (parents.parent2 === padreNombre) parentKey = 'parent2';
           else if (parents.other === padreNombre) parentKey = 'other';
+          
           let childKey = null;
           if (children.child1 === hijaNombre) childKey = 'child1';
           else if (children.child2 === hijaNombre) childKey = 'child2';
-          if (parentKey && childKey) {
-            const scheduleKey = `${asig.fecha}_${childKey}_${asig.periodo}`;
-            newSchedule[scheduleKey] = parentKey;
-            if (asig.observaciones) newNotes[scheduleKey] = asig.observaciones;
+          
+          if (!parentKey || !childKey) {
+            console.log('No coincide nombre:', { 
+              padreNombre, 
+              hijaNombre, 
+              'parents.parent1': parents.parent1,
+              'parents.parent2': parents.parent2,
+              'children.child1': children.child1,
+              'children.child2': children.child2
+            });
+            return;
           }
+          
+          const scheduleKey = `${asig.fecha}_${childKey}_${asig.periodo}`;
+          newSchedule[scheduleKey] = parentKey;
+          if (asig.observaciones) newNotes[scheduleKey] = asig.observaciones;
         });
-        setSchedule(newSchedule); setNotes(newNotes);
+        
+        console.log('Schedule cargado:', Object.keys(newSchedule).length, 'entradas');
+        setSchedule(newSchedule); 
+        setNotes(newNotes);
       }
+      
       const { data: turnosData, error: turnosError } = await supabase.from('turnos').select('*');
       if (turnosError) console.error('Error cargando turnos:', turnosError);
       if (turnosData && turnosData.length > 0) {
@@ -154,6 +184,7 @@ const CoParentingApp = () => {
           if (t.turno_madre) newTurnos[`${t.fecha}_madre`] = t.turno_madre;
         });
         setTurnos(newTurnos);
+        console.log('Turnos cargados:', Object.keys(newTurnos).length);
       }
     } catch (err) { console.error('Error inesperado al cargar:', err); }
   }, [parents, children]);
@@ -655,6 +686,12 @@ const CoParentingApp = () => {
                         const c2k = getScheduleKey(date, 'child2', period);
                         const c1a = schedule[c1k] === currentUser;
                         const c2a = schedule[c2k] === currentUser;
+                        
+                        // Debug para día 6
+                        if (date.getDate() === 6 && date.getMonth() === 11) {
+                          console.log(`Día 6 - ${period}: c1k=${c1k}, schedule[c1k]=${schedule[c1k]}, currentUser=${currentUser}, c1a=${c1a}`);
+                        }
+                        
                         return (
                           <div key={`${dateKey}_${period}`} className="flex gap-0.5 flex-1">
                             <div className="flex-1 flex items-center justify-center rounded font-bold text-[9px]" style={{ backgroundColor: c1a ? colors.child1 : '#e5e7eb' }}>
@@ -928,3 +965,4 @@ const CoParentingApp = () => {
 };
 
 export default CoParentingApp;
+
