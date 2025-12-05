@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Calendar, Users, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import SetupScreen from './SetupScreen';
 import { supabase } from './supabaseClient.js';
 
@@ -571,7 +571,11 @@ const CoParentingApp = () => {
     <div className="max-w-md mx-auto h-screen flex flex-col bg-white">
       <div className="flex items-center justify-between p-2" style={{ backgroundColor: topBarColor }}>
         <div className="flex items-center gap-2 text-white">
-          <Users size={18} />
+          <img 
+            src="/android-chrome-192x192.png" 
+            alt="Logo" 
+            className="w-8 h-8 rounded"
+          />
           <span 
             onClick={handleTitleTap}
             className="font-bold text-sm cursor-pointer select-none"
@@ -659,3 +663,4 @@ const CoParentingApp = () => {
 };
 
 export default CoParentingApp;
+
