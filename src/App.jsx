@@ -6,10 +6,16 @@ import { supabase } from './supabaseClient.js';
 const CoParentingApp = () => {
   const savedParents = typeof window !== 'undefined' ? localStorage.getItem('coparenting_parents') : null;
   const savedChildren = typeof window !== 'undefined' ? localStorage.getItem('coparenting_children') : null;
+  // NUEVO: Cargar el último usuario guardado
+  const savedUser = typeof window !== 'undefined' ? localStorage.getItem('coparenting_currentUser') : null;
+  
   const [parents, setParents] = useState(savedParents ? JSON.parse(savedParents) : { parent1: '', parent2: '' });
   const [children, setChildren] = useState(savedChildren ? JSON.parse(savedChildren) : { child1: '', child2: '' });
-  const [step, setStep] = useState(savedParents && savedChildren ? 'main' : 'setup');
-  const [currentUser, setCurrentUser] = useState(null);
+  // MODIFICADO: Si hay usuario guardado, ir directamente a 'main'
+  const [step, setStep] = useState(savedParents && savedChildren && savedUser ? 'main' : 'setup');
+  // MODIFICADO: Usar el usuario guardado si existe
+  const [currentUser, setCurrentUser] = useState(savedUser || null);
+  
   const colors = { parent1: '#FF6B35', parent2: '#86efac', child1: '#FDD835', child2: '#00BCD4', other: '#FF69B4' };
   const borderColors = { parent1: '#CC4400', parent2: '#065f46', child1: '#C6A700', child2: '#00838F', other: '#C2185B' };
   const [schedule, setSchedule] = useState({});
@@ -20,9 +26,11 @@ const CoParentingApp = () => {
   const periods = ['Mañana', 'Tarde', 'Noche'];
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
+  // MODIFICADO: Guardar también el usuario en localStorage
   const saveAndContinue = (user) => {
     localStorage.setItem('coparenting_parents', JSON.stringify(parents));
     localStorage.setItem('coparenting_children', JSON.stringify(children));
+    localStorage.setItem('coparenting_currentUser', user);
     setCurrentUser(user);
     setStep('main');
     setCurrentView('week');
@@ -510,6 +518,7 @@ const CoParentingApp = () => {
         setChildren={setChildren} 
         setCurrentUser={setCurrentUser} 
         setStep={setStep} 
+        saveAndContinue={saveAndContinue}
       />
     ); 
   }
