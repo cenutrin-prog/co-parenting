@@ -22,6 +22,19 @@ const CoParentingApp = () => {
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const monthsShort = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
+  // Truco: contador de toques en el título para desbloquear menú
+  const [titleTapCount, setTitleTapCount] = useState(0);
+
+  const handleTitleTap = () => {
+    const newCount = titleTapCount + 1;
+    setTitleTapCount(newCount);
+    if (newCount >= 3) {
+      setStep('setup');
+      setTitleTapCount(0);
+    }
+    setTimeout(() => setTitleTapCount(0), 2000);
+  };
+
   // Función para obtener el número de semana del año
   const getWeekNumber = (date) => {
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -559,7 +572,12 @@ const CoParentingApp = () => {
       <div className="flex items-center justify-between p-2" style={{ backgroundColor: topBarColor }}>
         <div className="flex items-center gap-2 text-white">
           <Users size={18} />
-          <span className="font-bold text-sm">CoParenting</span>
+          <span 
+            onClick={handleTitleTap}
+            className="font-bold text-sm cursor-pointer select-none"
+          >
+            CoParenting
+          </span>
         </div>
         <button 
           onClick={handleProfileClick} 
