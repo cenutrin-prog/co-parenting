@@ -543,22 +543,20 @@ const CoParentingApp = () => {
 
     // Calcular número de filas del mes (semanas)
     const numRows = Math.ceil(monthDates.length / 7);
-    // Altura de celda ajustada según filas (5 filas = más alto, 6 filas = más compacto)
-    const cellHeight = numRows <= 5 ? 58 : 48;
 
     return (
-      <div className="p-1 h-full flex flex-col" style={{ fontSize: 7 }}>
-        <div className="flex items-center justify-between mb-1">
-          <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={14} /></button>
+      <div className="p-0.5 h-full flex flex-col">
+        <div className="flex items-center justify-between mb-0.5">
+          <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-0.5"><ChevronLeft size={14} /></button>
           <div className="text-xs font-medium">{isChildUser ? `${childName}  ${capitalize(monthLabel)}` : capitalize(monthLabel)}</div>
-          <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={14} /></button>
+          <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-0.5"><ChevronRight size={14} /></button>
         </div>
-        <div className="flex-1">
-          <div className="grid h-full" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: `auto repeat(${numRows}, 1fr)`, gap: 1 }}>
-            {daysOfWeek.map(d => <div key={d} className="text-[6px] font-bold text-center">{d}</div>)}
+        <div className="flex-1 overflow-hidden">
+          <div className="grid h-full" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: `14px repeat(${numRows}, 1fr)`, gap: 2 }}>
+            {daysOfWeek.map(d => <div key={d} className="text-[8px] font-bold text-center">{d}</div>)}
             {monthDates.map((date, idx) => {
               const dateKey = date ? formatDate(date) : `empty-${idx}`;
-              if (!date) return <div key={dateKey} className="border rounded p-0.5 bg-gray-50" style={{ minHeight: cellHeight }} />;
+              if (!date) return <div key={dateKey} className="border rounded bg-gray-50" />;
               
               const turnoKey = getTurnoKey(date);
               const turnoPadre = turnos[`${turnoKey}_padre`] || '';
@@ -567,28 +565,20 @@ const CoParentingApp = () => {
               const turnoMadreCorto = getTurnoMadreCorto(turnoMadre);
 
               return (
-                <div key={dateKey} className="border rounded p-0.5 flex flex-col" style={{ minHeight: cellHeight, fontSize: 5 }}>
-                  {/* Número del día */}
-                  <div className="font-bold text-[7px]">{date.getDate()}</div>
+                <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden">
+                  {/* Cabecera: número del día + turnos en la misma zona */}
+                  <div className="flex justify-between items-start" style={{ minHeight: isParentUser ? '22px' : '14px' }}>
+                    <span className="font-bold text-[9px]">{date.getDate()}</span>
+                    {isParentUser && (turnoPadre || turnoMadreCorto) && (
+                      <div className="text-right" style={{ fontSize: 5, lineHeight: '7px' }}>
+                        {turnoPadre && <div className="truncate" style={{ color: colors.parent1 }}>{parents.parent1?.split(' ')[0]} {codP}</div>}
+                        {turnoMadreCorto && <div className="truncate" style={{ color: '#065f46' }}>{parents.parent2?.split(' ')[0]} {turnoMadreCorto}</div>}
+                      </div>
+                    )}
+                  </div>
                   
-                  {/* Turnos de los padres - altura fija */}
-                  {isParentUser && (
-                    <div style={{ minHeight: '14px', lineHeight: '7px' }}>
-                      {turnoPadre && (
-                        <div className="truncate" style={{ color: colors.parent1 }}>
-                          {parents.parent1?.split(' ')[0]} {codP}
-                        </div>
-                      )}
-                      {turnoMadreCorto && (
-                        <div className="truncate" style={{ color: '#065f46' }}>
-                          {parents.parent2?.split(' ')[0]} {turnoMadreCorto}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  
-                  {/* Asignaciones - siempre a la misma altura */}
-                  <div className="flex-1 flex flex-col justify-end">
+                  {/* Asignaciones - ocupan todo el espacio restante */}
+                  <div className="flex-1 flex flex-col gap-0.5">
                     {periods.map((period) => {
                       if (isParentUser) {
                         const c1k = getScheduleKey(date, 'child1', period);
@@ -596,11 +586,11 @@ const CoParentingApp = () => {
                         const c1a = schedule[c1k] === currentUser;
                         const c2a = schedule[c2k] === currentUser;
                         return (
-                          <div key={`${dateKey}_${period}`} className="flex gap-0.5" style={{ marginBottom: 1 }}>
-                            <div className="flex-1 text-center rounded" style={{ backgroundColor: c1a ? colors.child1 : '#f3f4f6', fontSize: 4 }}>
+                          <div key={`${dateKey}_${period}`} className="flex gap-0.5 flex-1">
+                            <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c1a ? colors.child1 : '#e5e7eb' }}>
                               {c1a ? (children.child1 || 'H1')[0] : '-'}
                             </div>
-                            <div className="flex-1 text-center rounded" style={{ backgroundColor: c2a ? colors.child2 : '#f3f4f6', fontSize: 4 }}>
+                            <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c2a ? colors.child2 : '#e5e7eb' }}>
                               {c2a ? (children.child2 || 'H2')[0] : '-'}
                             </div>
                           </div>
@@ -609,12 +599,12 @@ const CoParentingApp = () => {
                       if (isChildUser) {
                         const ck = getScheduleKey(date, currentUser, period);
                         const assigned = schedule[ck];
-                        let bg = '#f3f4f6';
+                        let bg = '#e5e7eb';
                         let txt = '-';
                         if (assigned === 'parent1') { bg = colors.parent1; txt = 'P'; }
                         else if (assigned === 'parent2') { bg = colors.parent2; txt = 'M'; }
                         else if (assigned === 'other') { bg = colors.other; txt = 'O'; }
-                        return <div key={`${dateKey}_${period}`} className="text-center rounded" style={{ backgroundColor: bg, fontSize: 4, marginBottom: 1 }}>{txt}</div>;
+                        return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: bg }}>{txt}</div>;
                       }
                       return null;
                     })}
