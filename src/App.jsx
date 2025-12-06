@@ -425,19 +425,19 @@ const CoParentingApp = () => {
     const childToShow = childFilter || currentUser;
 
     return (
-      <div className="mb-1">
+      <div className="mb-2">
         {/* Título del calendario secundario (solo para la otra hija) */}
         {childFilter && (
-          <div className="text-[9px] font-bold text-center mb-1" style={{ color: colors[childFilter] }}>
+          <div className="text-[10px] font-bold text-center mb-1" style={{ color: colors[childFilter] }}>
             {(children[childFilter] || 'Hermana').toUpperCase()}
           </div>
         )}
-        <div className="grid" style={{ gridTemplateColumns: '55px repeat(7, 1fr)', gap: 1, fontSize: 7 }}>
+        <div className="grid" style={{ gridTemplateColumns: '50px repeat(7, 1fr)', gap: 2, fontSize: 9 }}>
           {showHeader && (
             <>
               <div />
               {weekDates.map((d, i) => (
-                <div key={formatDate(d)} className="text-center font-bold text-[8px]">{daysOfWeek[i]} {d.getDate()}</div>
+                <div key={formatDate(d)} className="text-center font-bold text-[10px]">{daysOfWeek[i]} {d.getDate()}</div>
               ))}
             </>
           )}
@@ -445,31 +445,31 @@ const CoParentingApp = () => {
           {showTurnos && (
             <>
               {/* Fila turno padre */}
-              <div className="font-bold text-[7px] flex items-center" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
+              <div className="font-bold text-[9px] flex items-center" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
               {weekDates.map((d) => {
                 const turnoKey = getTurnoKey(d);
                 const turno = turnos[`${turnoKey}_padre`] || '';
                 const { codigo, horario } = parseTurnoPadre(turno);
                 return (
                   <div key={`tp_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: turno ? colors.parent1 + '40' : '#f3f4f6', color: colors.parent1 }}>
-                    <div className="text-[7px] font-bold">{codigo}</div>
-                    {horario && <div className="text-[6px]">{horario}</div>}
+                    <div className="text-[9px] font-bold">{codigo}</div>
+                    {horario && <div className="text-[7px]">{horario}</div>}
                   </div>
                 );
               })}
               {/* Fila turno madre */}
-              <div className="font-bold text-[7px] flex items-center" style={{ color: '#065f46' }}>{parents.parent2 || 'Madre'}</div>
+              <div className="font-bold text-[9px] flex items-center" style={{ color: '#065f46' }}>{parents.parent2 || 'Madre'}</div>
               {weekDates.map((d) => {
                 const turnoKey = getTurnoKey(d);
                 const turno = turnos[`${turnoKey}_madre`] || '';
                 const parsed = parseTurnoMadre(turno);
                 return (
                   <div key={`tm_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: turno ? colors.parent2 + '40' : '#f3f4f6', color: '#065f46' }}>
-                    {parsed.length === 0 && <div className="text-[7px]">-</div>}
+                    {parsed.length === 0 && <div className="text-[9px]">-</div>}
                     {parsed.map((t, idx) => (
                       <div key={idx}>
-                        <div className="text-[7px] font-bold">{t.tipo}</div>
-                        <div className="text-[6px]">{t.entrada}-{t.salida}</div>
+                        <div className="text-[9px] font-bold">{t.tipo}</div>
+                        <div className="text-[7px]">{t.entrada}-{t.salida}</div>
                       </div>
                     ))}
                   </div>
@@ -480,10 +480,10 @@ const CoParentingApp = () => {
           
           {periods.map((period) => (
             <React.Fragment key={period}>
-              <div className="font-bold text-[8px] flex items-center">{period}</div>
+              <div className="font-bold text-[10px] flex items-center">{period}</div>
               {weekDates.map((d) => {
                 return (
-                  <div key={`${formatDate(d)}_${period}`} className="border rounded p-0.5 min-h-[18px] flex items-center justify-center gap-0.5">
+                  <div key={`${formatDate(d)}_${period}`} className="border rounded p-1 min-h-[28px] flex items-center justify-center gap-1">
                     {isParentUser && ['child1', 'child2'].map((child) => {
                       const sk = getScheduleKey(d, child, period);
                       const assigned = schedule[sk];
@@ -492,8 +492,8 @@ const CoParentingApp = () => {
                       const displayName = isWithThisParent ? (children[child] || (child === 'child1' ? 'H1' : 'H2')) : '-';
                       return (
                         <div key={sk} onClick={() => obs && setPopupObs(obs)}
-                          className="text-[9px] text-center rounded px-0.5 cursor-pointer font-medium"
-                          style={{ backgroundColor: isWithThisParent ? colors[child] : '#f3f4f6', color: isWithThisParent ? '#000' : '#666' }}>
+                          className="text-[11px] text-center rounded px-1 py-0.5 cursor-pointer font-bold"
+                          style={{ backgroundColor: isWithThisParent ? colors[child] : '#e5e7eb', color: isWithThisParent ? '#000' : '#888' }}>
                           {displayName}{obs && '*'}
                         </div>
                       );
@@ -507,8 +507,8 @@ const CoParentingApp = () => {
                       const displayName = assigned ? (assigned === 'parent1' ? 'Papá' : assigned === 'parent2' ? 'Mamá' : parents.other || 'Otro') : '-';
                       return (
                         <div onClick={() => obs && setPopupObs(obs)}
-                          className="text-[9px] text-center rounded px-0.5 cursor-pointer font-medium"
-                          style={{ backgroundColor: assigned ? colors[assigned] : '#f3f4f6', color: assigned ? '#000' : '#666' }}>
+                          className="text-[11px] text-center rounded px-1 py-0.5 cursor-pointer font-bold"
+                          style={{ backgroundColor: assigned ? colors[assigned] : '#e5e7eb', color: assigned ? '#000' : '#888' }}>
                           {displayName}{obs && '*'}
                         </div>
                       );
@@ -532,17 +532,17 @@ const CoParentingApp = () => {
     ];
     return (
       <div className="mb-2 border-t-2 pt-2">
-        <div className="text-[9px] font-bold text-center mb-1">CALENDARIO GLOBAL</div>
-        <div className="grid" style={{ gridTemplateColumns: '55px repeat(7, 1fr)', gap: 1, fontSize: 7 }}>
+        <div className="text-[10px] font-bold text-center mb-1">CALENDARIO GLOBAL</div>
+        <div className="grid" style={{ gridTemplateColumns: '50px repeat(7, 1fr)', gap: 2, fontSize: 8 }}>
           <div />
           {weekDates.map((d, i) => (
-            <div key={formatDate(d)} className="text-center font-bold text-[8px]">{daysOfWeek[i]} {d.getDate()}</div>
+            <div key={formatDate(d)} className="text-center font-bold text-[9px]">{daysOfWeek[i]} {d.getDate()}</div>
           ))}
           {periods.map((period) => (
             <React.Fragment key={period}>
-              <div className="font-bold text-[8px] flex items-center">{period}</div>
+              <div className="font-bold text-[9px] flex items-center">{period}</div>
               {weekDates.map((d) => (
-                <div key={`${formatDate(d)}_${period}_g`} className="border rounded p-0.5 min-h-[24px]">
+                <div key={`${formatDate(d)}_${period}_g`} className="border rounded p-0.5 min-h-[28px]">
                   {caregivers.map(cg => {
                     const c1k = getScheduleKey(d, 'child1', period);
                     const c2k = getScheduleKey(d, 'child2', period);
@@ -551,7 +551,7 @@ const CoParentingApp = () => {
                     const c1i = c1a ? (children.child1 || 'H1')[0].toUpperCase() : '-';
                     const c2i = c2a ? (children.child2 || 'H2')[0].toUpperCase() : '-';
                     return (
-                      <div key={cg.key} className="flex items-center gap-0.5 text-[6px]">
+                      <div key={cg.key} className="flex items-center gap-0.5 text-[7px]">
                         <span className="font-bold" style={{ color: colors[cg.key] }}>{cg.initial}</span>
                         <span className="px-0.5 rounded" style={{ backgroundColor: c1a ? colors.child1 : '#f3f4f6' }}>{c1i}</span>
                         <span className="px-0.5 rounded" style={{ backgroundColor: c2a ? colors.child2 : '#f3f4f6' }}>{c2i}</span>
@@ -981,15 +981,15 @@ const CoParentingApp = () => {
         <button onClick={handleProfileClick} className={`text-xs px-2 py-1 rounded border-2 font-medium ${isChild ? 'cursor-default' : 'cursor-pointer'}`}
           style={{ borderColor: profileBorder, backgroundColor: 'white', color: topBarColor }}>{displayName}</button>
       </div>
-      <div className="flex gap-1 p-2 border-b overflow-x-auto">
+      <div className="flex gap-1 p-1.5 border-b">
         {/* Botón Día - SOLO para padre (parent1) */}
         {isParent1 && (
-          <button onClick={() => setCurrentView('daily')} className={`px-3 py-1 text-xs rounded ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-            <Calendar size={14} /> Día
+          <button onClick={() => setCurrentView('daily')} className={`px-2 py-1 text-xs rounded flex items-center gap-1 ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            <Calendar size={12} /> Día
           </button>
         )}
-        <button onClick={() => setCurrentView('week')} className={`px-3 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Semana</button>
-        <button onClick={() => setCurrentView('month')} className={`px-3 py-1 text-xs rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Mes</button>
+        <button onClick={() => setCurrentView('week')} className={`px-2 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Sem</button>
+        <button onClick={() => setCurrentView('month')} className={`px-2 py-1 text-xs rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Mes</button>
         {/* Botones vista mensual hijos - para padre y madre */}
         {isParent && (
           <>
@@ -1006,10 +1006,10 @@ const CoParentingApp = () => {
         {/* Estadísticas y Guardar - SOLO para padre (parent1) */}
         {isParent1 && (
           <>
-            <button onClick={() => setCurrentView('stats')} className={`px-3 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-              <BarChart3 size={14} /> Estadísticas
+            <button onClick={() => setCurrentView('stats')} className={`px-2 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+              <BarChart3 size={14} />
             </button>
-            <button onClick={saveScheduleInSupabase} className="px-3 py-1 text-xs rounded bg-green-600 text-white">Guardar</button>
+            <button onClick={saveScheduleInSupabase} className="px-2 py-1 text-xs rounded bg-green-600 text-white font-medium">Guardar</button>
           </>
         )}
       </div>
