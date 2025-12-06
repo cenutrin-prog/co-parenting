@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.coparenting.twa",
+        "sha256_cert_fingerprints": ["FC:B9:40:ED:D5:5F:9C:9B:2E:8A:9A:BB:FE:8A:D1:AD:93:EF:D0:C5:D8:6B:A0:61:36:BC:A5:B5:67:DD:D0:01"]
+      }
+    }]
