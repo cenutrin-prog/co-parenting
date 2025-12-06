@@ -644,18 +644,18 @@ const CoParentingApp = () => {
     const numRows = Math.ceil(monthDates.length / 7);
 
     return (
-      <div className="p-0.5 h-full flex flex-col">
-        <div className="flex items-center justify-between mb-0.5">
-          <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-0.5"><ChevronLeft size={14} /></button>
-          <div className="text-xs font-medium">{isChildUser ? `${childName}  ${capitalize(monthLabel)}` : capitalize(monthLabel)}</div>
-          <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-0.5"><ChevronRight size={14} /></button>
+      <div className="p-2">
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={18} /></button>
+          <div className="text-sm font-medium">{isChildUser ? `${childName}  ${capitalize(monthLabel)}` : capitalize(monthLabel)}</div>
+          <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={18} /></button>
         </div>
-        <div className="flex-1 overflow-hidden">
-          <div className="grid h-full" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: `14px repeat(${numRows}, 1fr)`, gap: 2 }}>
-            {daysOfWeek.map(d => <div key={d} className="text-[8px] font-bold text-center">{d}</div>)}
+        <div>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+            {daysOfWeek.map(d => <div key={d} className="text-[9px] font-bold text-center py-1">{d}</div>)}
             {monthDates.map((date, idx) => {
               const dateKey = date ? formatDate(date) : `empty-${idx}`;
-              if (!date) return <div key={dateKey} className="border rounded bg-gray-50" />;
+              if (!date) return <div key={dateKey} className="border rounded bg-gray-50 min-h-[52px]" />;
               
               const turnoKey = getTurnoKey(date);
               const turnoPadre = turnos[`${turnoKey}_padre`] || '';
@@ -664,7 +664,7 @@ const CoParentingApp = () => {
               const turnoMadreCorto = getTurnoMadreCorto(turnoMadre);
 
               return (
-                <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden">
+                <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden min-h-[52px]">
                   {/* Cabecera con número y turnos */}
                   <div className="flex" style={{ fontSize: 6, lineHeight: '8px' }}>
                     {/* Número del día */}
@@ -685,7 +685,7 @@ const CoParentingApp = () => {
                     )}
                   </div>
                   
-                  {/* Asignaciones - ocupan todo el espacio restante */}
+                  {/* Asignaciones */}
                   <div className="flex-1 flex flex-col gap-0.5 mt-0.5">
                     {periods.map((period) => {
                       if (isParentUser) {
@@ -694,17 +694,12 @@ const CoParentingApp = () => {
                         const c1a = schedule[c1k] === currentUser;
                         const c2a = schedule[c2k] === currentUser;
                         
-                        // Debug para día 6
-                        if (date.getDate() === 6 && date.getMonth() === 11) {
-                          console.log(`Día 6 - ${period}: c1k=${c1k}, schedule[c1k]=${schedule[c1k]}, currentUser=${currentUser}, c1a=${c1a}`);
-                        }
-                        
                         return (
                           <div key={`${dateKey}_${period}`} className="flex gap-0.5 flex-1">
-                            <div className="flex-1 flex items-center justify-center rounded font-bold text-[9px]" style={{ backgroundColor: c1a ? colors.child1 : '#e5e7eb' }}>
+                            <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c1a ? colors.child1 : '#e5e7eb' }}>
                               {c1a ? (children.child1 || 'H1')[0] : '-'}
                             </div>
-                            <div className="flex-1 flex items-center justify-center rounded font-bold text-[9px]" style={{ backgroundColor: c2a ? colors.child2 : '#e5e7eb' }}>
+                            <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c2a ? colors.child2 : '#e5e7eb' }}>
                               {c2a ? (children.child2 || 'H2')[0] : '-'}
                             </div>
                           </div>
@@ -981,23 +976,25 @@ const CoParentingApp = () => {
         <button onClick={handleProfileClick} className={`text-xs px-2 py-1 rounded border-2 font-medium ${isChild ? 'cursor-default' : 'cursor-pointer'}`}
           style={{ borderColor: profileBorder, backgroundColor: 'white', color: topBarColor }}>{displayName}</button>
       </div>
-      <div className="flex gap-1 p-1.5 border-b">
+      <div className="flex gap-1.5 p-2 border-b">
         {/* Botón Día - SOLO para padre (parent1) */}
         {isParent1 && (
-          <button onClick={() => setCurrentView('daily')} className={`px-2 py-1 text-xs rounded flex items-center gap-1 ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-            <Calendar size={12} /> Día
+          <button onClick={() => setCurrentView('daily')} className={`px-3 py-1.5 text-sm rounded flex items-center gap-1 ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            <Calendar size={14} /> Día
           </button>
         )}
-        <button onClick={() => setCurrentView('week')} className={`px-2 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Sem</button>
-        <button onClick={() => setCurrentView('month')} className={`px-2 py-1 text-xs rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Mes</button>
+        <button onClick={() => setCurrentView('week')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+          {isParent1 ? 'Sem' : 'Semana'}
+        </button>
+        <button onClick={() => setCurrentView('month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Mes</button>
         {/* Botones vista mensual hijos - para padre y madre */}
         {isParent && (
           <>
-            <button onClick={() => setCurrentView('child1month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child1month' ? 'text-white' : 'bg-gray-100'}`}
+            <button onClick={() => setCurrentView('child1month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'child1month' ? 'text-white' : 'bg-gray-100'}`}
               style={{ backgroundColor: currentView === 'child1month' ? colors.child1 : undefined, color: currentView === 'child1month' ? '#000' : undefined }}>
               {children.child1 || 'Hijo 1'}
             </button>
-            <button onClick={() => setCurrentView('child2month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
+            <button onClick={() => setCurrentView('child2month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
               style={{ backgroundColor: currentView === 'child2month' ? colors.child2 : undefined, color: currentView === 'child2month' ? '#000' : undefined }}>
               {children.child2 || 'Hijo 2'}
             </button>
@@ -1006,10 +1003,10 @@ const CoParentingApp = () => {
         {/* Estadísticas y Guardar - SOLO para padre (parent1) */}
         {isParent1 && (
           <>
-            <button onClick={() => setCurrentView('stats')} className={`px-2 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-              <BarChart3 size={14} />
+            <button onClick={() => setCurrentView('stats')} className={`px-2 py-1.5 text-sm rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+              <BarChart3 size={16} />
             </button>
-            <button onClick={saveScheduleInSupabase} className="px-2 py-1 text-xs rounded bg-green-600 text-white font-medium">Guardar</button>
+            <button onClick={saveScheduleInSupabase} className="px-3 py-1.5 text-sm rounded bg-green-600 text-white font-medium">Guardar</button>
           </>
         )}
       </div>
