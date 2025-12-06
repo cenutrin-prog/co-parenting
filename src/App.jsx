@@ -310,11 +310,11 @@ const CoParentingApp = () => {
       setTurnos(prev => ({ ...prev, [`${fecha}_madre`]: newTurno }));
     };
 
-    const selectStyle = "w-full text-[7px] p-0 border rounded";
+    const selectStyle = "w-full text-[9px] p-0.5 border rounded";
     const hasTurno = t1.tipo || t2.tipo;
 
     return (
-      <div className="flex flex-col gap-0.5" style={{ backgroundColor: hasTurno ? colors.parent2 + '30' : 'white' }}>
+      <div className="flex flex-col gap-0.5 p-0.5 rounded" style={{ backgroundColor: hasTurno ? colors.parent2 + '30' : 'white' }}>
         <div className="flex gap-0.5">
           <select value={t1.tipo || ''} onChange={e => updateTurno('tipo', e.target.value, 1)} className={selectStyle}>
             {tiposTurnoMadre.map(t => <option key={t || 'empty1'} value={t}>{t || '-'}</option>)}
@@ -344,6 +344,7 @@ const CoParentingApp = () => {
   // VISTA DÍA
   const DailyView = () => {
     const isChildUser = currentUser === 'child1' || currentUser === 'child2';
+    const isParent1User = currentUser === 'parent1';
     const childrenToShow = isChildUser ? [currentUser] : ['child1', 'child2'];
     const dayName = daysOfWeek[currentDate.getDay() === 0 ? 6 : currentDate.getDay() - 1];
     const dayNum = currentDate.getDate();
@@ -352,49 +353,58 @@ const CoParentingApp = () => {
     const turnoPadre = turnos[`${turnoKey}_padre`] || '';
 
     return (
-      <div className="p-1 flex flex-col h-full overflow-hidden" style={{ fontSize: 10 }}>
-        <div className="flex justify-between items-center mb-1">
-          <button onClick={() => setCurrentDate(d => addDays(d, -1))} className="px-2 py-0.5 border rounded text-xs">◀</button>
-          <div className="font-bold text-xs text-center">{dayName} {dayNum} {monthName}</div>
-          <button onClick={() => setCurrentDate(d => addDays(d, 1))} className="px-2 py-0.5 border rounded text-xs">▶</button>
+      <div className="p-2 flex flex-col h-full overflow-hidden">
+        {/* Cabecera con navegación y botón Guardar */}
+        <div className="flex justify-between items-center mb-2">
+          <button onClick={() => setCurrentDate(d => addDays(d, -1))} className="px-3 py-1 border rounded text-sm font-bold">◀</button>
+          <div className="flex flex-col items-center">
+            {isParent1User && (
+              <button onClick={saveScheduleInSupabase} className="px-4 py-1 text-sm rounded bg-green-600 text-white font-bold mb-1">Guardar</button>
+            )}
+            <div className="font-bold text-sm text-center">{dayName} {dayNum} {monthName}</div>
+          </div>
+          <button onClick={() => setCurrentDate(d => addDays(d, 1))} className="px-3 py-1 border rounded text-sm font-bold">▶</button>
         </div>
         
+        {/* Turnos de trabajo */}
         {(currentUser === 'parent1' || currentUser === 'parent2') && (
-          <div className="mb-1 p-1 border rounded bg-gray-50">
-            <div className="text-[8px] font-bold mb-0.5">Turnos de trabajo</div>
-            <div className="flex gap-1">
+          <div className="mb-2 p-2 border rounded bg-gray-50">
+            <div className="text-xs font-bold mb-1">Turnos de trabajo</div>
+            <div className="flex gap-2">
               <div className="flex-1">
-                <div className="text-[7px] font-medium" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
+                <div className="text-xs font-medium mb-0.5" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
                 <select value={turnoPadre} onChange={e => handleTurnoChange(turnoKey, 'padre', e.target.value)}
-                  className="w-full text-[7px] p-0.5 border rounded"
+                  className="w-full text-xs p-1 border rounded"
                   style={{ backgroundColor: turnoPadre ? colors.parent1 + '30' : 'white' }}>
                   <option value="">Sin turno</option>
                   {turnosPadre.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
               <div className="flex-1">
-                <div className="text-[7px] font-medium" style={{ color: colors.parent2 }}>{parents.parent2 || 'Madre'}</div>
+                <div className="text-xs font-medium mb-0.5" style={{ color: colors.parent2 }}>{parents.parent2 || 'Madre'}</div>
                 <TurnoMadreSelector fecha={turnoKey} />
               </div>
             </div>
           </div>
         )}
         
-        <div className="flex-1 flex flex-col gap-0.5 min-h-0">
+        {/* Franjas Mañana/Tarde/Noche */}
+        <div className="flex-1 flex flex-col gap-1 min-h-0">
           {periods.map((period) => (
-            <div key={period} className="flex-1 border rounded p-0.5 flex flex-col min-h-0">
-              <div className="text-[8px] font-bold uppercase">{period}</div>
-              <div className="flex gap-0.5 flex-1 min-h-0">
+            <div key={period} className="flex-1 border rounded p-1.5 flex flex-col min-h-0">
+              <div className="text-xs font-bold uppercase mb-1">{period}</div>
+              <div className="flex gap-1 flex-1 min-h-0">
                 {childrenToShow.map((child) => {
                   const sk = getScheduleKey(currentDate, child, period);
                   const childName = children[child] || (child === 'child1' ? 'Hijo 1' : 'Hijo 2');
                   const scheduleValue = schedule[sk] || '';
                   const noteValue = notes[sk] || '';
                   return (
-                    <div key={sk} className="border rounded p-0.5 flex-1 flex flex-col min-h-0">
-                      <div className="text-[8px] font-medium" style={{ color: colors[child] }}>{childName}</div>
+                    <div key={sk} className="border rounded p-1 flex-1 flex flex-col min-h-0"
+                      style={{ backgroundColor: scheduleValue ? colors[scheduleValue] + '20' : 'white' }}>
+                      <div className="text-xs font-bold mb-0.5" style={{ color: colors[child] }}>{childName}</div>
                       <select value={scheduleValue} onChange={e => handleScheduleChange(sk, e.target.value)} disabled={isChildUser}
-                        className="w-full text-[8px] p-0.5 border rounded"
+                        className="w-full text-xs p-1 border rounded mb-1"
                         style={{ backgroundColor: scheduleValue ? colors[scheduleValue] + '40' : 'white' }}>
                         <option value="">-</option>
                         <option value="parent1">{parents.parent1 || 'Papá'}</option>
@@ -403,7 +413,7 @@ const CoParentingApp = () => {
                       </select>
                       <textarea placeholder="Obs..." defaultValue={noteValue}
                         onBlur={e => handleNoteChange(sk, e.target.value)} disabled={isChildUser}
-                        className="w-full text-[7px] p-0.5 border rounded mt-0.5 flex-1 min-h-0" style={{ resize: 'none' }} />
+                        className="w-full text-[10px] p-1 border rounded flex-1 min-h-[28px] max-h-[40px]" style={{ resize: 'none' }} />
                     </div>
                   );
                 })}
@@ -1000,14 +1010,11 @@ const CoParentingApp = () => {
             </button>
           </>
         )}
-        {/* Estadísticas y Guardar - SOLO para padre (parent1) */}
+        {/* Estadísticas - SOLO para padre (parent1) */}
         {isParent1 && (
-          <>
-            <button onClick={() => setCurrentView('stats')} className={`px-2 py-1.5 text-sm rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-              <BarChart3 size={16} />
-            </button>
-            <button onClick={saveScheduleInSupabase} className="px-3 py-1.5 text-sm rounded bg-green-600 text-white font-medium">Guardar</button>
-          </>
+          <button onClick={() => setCurrentView('stats')} className={`px-2 py-1.5 text-sm rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            <BarChart3 size={16} />
+          </button>
         )}
       </div>
       <div className="flex-1 overflow-y-auto">
