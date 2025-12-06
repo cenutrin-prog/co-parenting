@@ -432,7 +432,7 @@ const CoParentingApp = () => {
             {(children[childFilter] || 'Hermana').toUpperCase()}
           </div>
         )}
-        <div className="grid" style={{ gridTemplateColumns: '50px repeat(7, 1fr)', gap: 2, fontSize: 9 }}>
+        <div className="grid" style={{ gridTemplateColumns: isParentUser ? '45px repeat(7, 1fr)' : '50px repeat(7, 1fr)', gap: 2, fontSize: 9 }}>
           {showHeader && (
             <>
               <div />
@@ -445,31 +445,31 @@ const CoParentingApp = () => {
           {showTurnos && (
             <>
               {/* Fila turno padre */}
-              <div className="font-bold text-[9px] flex items-center" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
+              <div className="font-bold text-[8px] flex items-center" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
               {weekDates.map((d) => {
                 const turnoKey = getTurnoKey(d);
                 const turno = turnos[`${turnoKey}_padre`] || '';
                 const { codigo, horario } = parseTurnoPadre(turno);
                 return (
                   <div key={`tp_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: turno ? colors.parent1 + '40' : '#f3f4f6', color: colors.parent1 }}>
-                    <div className="text-[9px] font-bold">{codigo}</div>
-                    {horario && <div className="text-[7px]">{horario}</div>}
+                    <div className="text-[8px] font-bold">{codigo}</div>
+                    {horario && <div className="text-[6px]">{horario}</div>}
                   </div>
                 );
               })}
               {/* Fila turno madre */}
-              <div className="font-bold text-[9px] flex items-center" style={{ color: '#065f46' }}>{parents.parent2 || 'Madre'}</div>
+              <div className="font-bold text-[8px] flex items-center" style={{ color: '#065f46' }}>{parents.parent2 || 'Madre'}</div>
               {weekDates.map((d) => {
                 const turnoKey = getTurnoKey(d);
                 const turno = turnos[`${turnoKey}_madre`] || '';
                 const parsed = parseTurnoMadre(turno);
                 return (
                   <div key={`tm_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: turno ? colors.parent2 + '40' : '#f3f4f6', color: '#065f46' }}>
-                    {parsed.length === 0 && <div className="text-[9px]">-</div>}
+                    {parsed.length === 0 && <div className="text-[8px]">-</div>}
                     {parsed.map((t, idx) => (
                       <div key={idx}>
-                        <div className="text-[9px] font-bold">{t.tipo}</div>
-                        <div className="text-[7px]">{t.entrada}-{t.salida}</div>
+                        <div className="text-[8px] font-bold">{t.tipo}</div>
+                        <div className="text-[6px]">{t.entrada}-{t.salida}</div>
                       </div>
                     ))}
                   </div>
@@ -483,7 +483,7 @@ const CoParentingApp = () => {
               <div className="font-bold text-[10px] flex items-center">{period}</div>
               {weekDates.map((d) => {
                 return (
-                  <div key={`${formatDate(d)}_${period}`} className="border rounded p-1 min-h-[28px] flex items-center justify-center gap-1">
+                  <div key={`${formatDate(d)}_${period}`} className="border rounded p-0.5 min-h-[32px] flex flex-col items-center justify-center gap-0.5">
                     {isParentUser && ['child1', 'child2'].map((child) => {
                       const sk = getScheduleKey(d, child, period);
                       const assigned = schedule[sk];
@@ -492,8 +492,8 @@ const CoParentingApp = () => {
                       const displayName = isWithThisParent ? (children[child] || (child === 'child1' ? 'H1' : 'H2')) : '-';
                       return (
                         <div key={sk} onClick={() => obs && setPopupObs(obs)}
-                          className="text-[11px] text-center rounded px-1 py-0.5 cursor-pointer font-bold"
-                          style={{ backgroundColor: isWithThisParent ? colors[child] : '#e5e7eb', color: isWithThisParent ? '#000' : '#888' }}>
+                          className="text-[9px] text-center rounded px-1 cursor-pointer font-bold w-full"
+                          style={{ backgroundColor: isWithThisParent ? colors[child] : '#e5e7eb', color: isWithThisParent ? '#000' : '#999' }}>
                           {displayName}{obs && '*'}
                         </div>
                       );
