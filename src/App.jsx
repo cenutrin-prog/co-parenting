@@ -914,7 +914,55 @@ const CoParentingApp = () => {
   const displayName = currentUser === 'child1' ? children.child1 : currentUser === 'child2' ? children.child2 : currentUser === 'parent1' ? parents.parent1 : currentUser === 'parent2' ? parents.parent2 : 'Usuario';
   const isParent1 = currentUser === 'parent1';
   const isParent2 = currentUser === 'parent2';
+  const isParent = isParent1 || isParent2;
   const isChild = currentUser === 'child1' || currentUser === 'child2';
+
+  // Vista mensual de un hijo específico (para padres)
+  const ChildMonthView = ({ childKey }) => {
+    const monthDates = getMonthDates(currentDate);
+    const monthLabel = currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    const childName = (children[childKey] || 'Hijo').toUpperCase();
+    const childColor = colors[childKey];
+
+    return (
+      <div className="p-0.5 h-full flex flex-col">
+        <div className="flex items-center justify-between mb-0.5">
+          <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-0.5"><ChevronLeft size={14} /></button>
+          <div className="text-xs font-medium">
+            <span style={{ color: childColor }}>{childName}</span> - {capitalize(monthLabel)}
+          </div>
+          <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-0.5"><ChevronRight size={14} /></button>
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <div className="grid h-full" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: `14px repeat(${Math.ceil(monthDates.length / 7)}, 1fr)`, gap: 2 }}>
+            {daysOfWeek.map(d => <div key={d} className="text-[8px] font-bold text-center">{d}</div>)}
+            {monthDates.map((date, idx) => {
+              const dateKey = date ? formatDate(date) : `empty-${idx}`;
+              if (!date) return <div key={dateKey} className="border rounded bg-gray-50" />;
+
+              return (
+                <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden">
+                  <div className="font-bold text-[9px] mb-0.5">{date.getDate()}</div>
+                  <div className="flex-1 flex flex-col gap-0.5">
+                    {periods.map((period) => {
+                      const ck = getScheduleKey(date, childKey, period);
+                      const assigned = schedule[ck];
+                      let bg = '#e5e7eb';
+                      let txt = '-';
+                      if (assigned === 'parent1') { bg = colors.parent1; txt = 'Papá'; }
+                      else if (assigned === 'parent2') { bg = colors.parent2; txt = 'Mamá'; }
+                      else if (assigned === 'other') { bg = colors.other; txt = parents.other || 'Otro'; }
+                      return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[7px]" style={{ backgroundColor: bg }}>{txt}</div>;
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-md mx-auto h-screen flex flex-col bg-white">
@@ -927,13 +975,28 @@ const CoParentingApp = () => {
           style={{ borderColor: profileBorder, backgroundColor: 'white', color: topBarColor }}>{displayName}</button>
       </div>
       <div className="flex gap-1 p-2 border-b overflow-x-auto">
-        {(isParent1 || isParent2) && (
+        {/* Botón Día - SOLO para padre (parent1) */}
+        {isParent1 && (
           <button onClick={() => setCurrentView('daily')} className={`px-3 py-1 text-xs rounded ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
             <Calendar size={14} /> Día
           </button>
         )}
         <button onClick={() => setCurrentView('week')} className={`px-3 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Semana</button>
         <button onClick={() => setCurrentView('month')} className={`px-3 py-1 text-xs rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Mes</button>
+        {/* Botones vista mensual hijos - para padre y madre */}
+        {isParent && (
+          <>
+            <button onClick={() => setCurrentView('child1month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child1month' ? 'text-white' : 'bg-gray-100'}`}
+              style={{ backgroundColor: currentView === 'child1month' ? colors.child1 : undefined, color: currentView === 'child1month' ? '#000' : undefined }}>
+              {children.child1 || 'Hijo 1'}
+            </button>
+            <button onClick={() => setCurrentView('child2month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
+              style={{ backgroundColor: currentView === 'child2month' ? colors.child2 : undefined, color: currentView === 'child2month' ? '#000' : undefined }}>
+              {children.child2 || 'Hijo 2'}
+            </button>
+          </>
+        )}
+        {/* Estadísticas y Guardar - SOLO para padre (parent1) */}
         {isParent1 && (
           <>
             <button onClick={() => setCurrentView('stats')} className={`px-3 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
@@ -947,6 +1010,8 @@ const CoParentingApp = () => {
         {currentView === 'daily' && <DailyView />}
         {currentView === 'week' && <WeekView />}
         {currentView === 'month' && <MonthView />}
+        {currentView === 'child1month' && <ChildMonthView childKey="child1" />}
+        {currentView === 'child2month' && <ChildMonthView childKey="child2" />}
         {currentView === 'stats' && <StatsView />}
       </div>
       {popupObs && (
@@ -965,4 +1030,3 @@ const CoParentingApp = () => {
 };
 
 export default CoParentingApp;
-
