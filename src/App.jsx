@@ -634,17 +634,29 @@ const CoParentingApp = () => {
     const isParentUser = currentUser === 'parent1' || currentUser === 'parent2';
     const childName = isChildUser ? (children[currentUser] || 'Hijo').toUpperCase() : '';
 
-    // Función para obtener texto corto del turno madre (Mañ, Tar, Noc, Mañ/Tar)
+    // Función para obtener iniciales del nombre (JL para Jose Luis, Ire para Irene)
+    const getIniciales = (nombre, isParent1) => {
+      if (!nombre) return isParent1 ? 'P' : 'M';
+      if (isParent1) {
+        // Para el padre: iniciales de cada palabra (Jose Luis -> JL)
+        return nombre.split(' ').map(p => p[0]).join('').toUpperCase();
+      } else {
+        // Para la madre: primeras 3 letras (Irene -> Ire)
+        return nombre.substring(0, 3);
+      }
+    };
+
+    // Función para obtener texto corto del turno madre (M, T, N, M/T)
     const getTurnoMadreCorto = (turnoStr) => {
       if (!turnoStr) return '';
       const parsed = parseTurnoMadre(turnoStr);
       if (parsed.length === 0) return '';
       const abreviar = (tipo) => {
         if (!tipo) return '';
-        if (tipo.toLowerCase().startsWith('mañ')) return 'Mañ';
-        if (tipo.toLowerCase().startsWith('tar')) return 'Tar';
-        if (tipo.toLowerCase().startsWith('noc')) return 'Noc';
-        return tipo.substring(0, 3);
+        if (tipo.toLowerCase().startsWith('mañ')) return 'M';
+        if (tipo.toLowerCase().startsWith('tar')) return 'T';
+        if (tipo.toLowerCase().startsWith('noc')) return 'N';
+        return tipo[0].toUpperCase();
       };
       if (parsed.length === 1) return abreviar(parsed[0].tipo);
       return parsed.map(t => abreviar(t.tipo)).filter(t => t).join('/');
@@ -652,6 +664,9 @@ const CoParentingApp = () => {
 
     // Calcular número de filas del mes (semanas)
     const numRows = Math.ceil(monthDates.length / 7);
+
+    const inicialesPadre = getIniciales(parents.parent1, true);
+    const inicialesMadre = getIniciales(parents.parent2, false);
 
     return (
       <div className="p-2">
@@ -678,18 +693,18 @@ const CoParentingApp = () => {
                   {/* Cabecera con número y turnos */}
                   <div className="flex" style={{ fontSize: 6, lineHeight: '8px' }}>
                     {/* Número del día */}
-                    <span className="font-bold text-[9px] mr-1">{date.getDate()}</span>
+                    <span className="font-bold text-[9px] mr-0.5">{date.getDate()}</span>
                     
                     {/* Turnos de los padres */}
                     {isParentUser && (
-                      <div className="flex-1 flex flex-col">
+                      <div className="flex-1 flex flex-col text-[6px]">
                         <div className="flex justify-between" style={{ color: colors.parent1 }}>
-                          <span className="truncate">{parents.parent1}</span>
-                          <span className="font-bold ml-0.5">{codP || '-'}</span>
+                          <span className="font-bold">{inicialesPadre}</span>
+                          <span className="font-bold">{codP || '-'}</span>
                         </div>
                         <div className="flex justify-between" style={{ color: '#065f46' }}>
-                          <span className="truncate">{parents.parent2}</span>
-                          <span className="font-bold ml-0.5">{turnoMadreCorto || '-'}</span>
+                          <span className="font-bold">{inicialesMadre}</span>
+                          <span className="font-bold">{turnoMadreCorto || '-'}</span>
                         </div>
                       </div>
                     )}
