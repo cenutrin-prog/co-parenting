@@ -60,7 +60,14 @@ const CoParentingApp = () => {
     setCurrentUser(user); setStep('main'); setCurrentView('week');
   };
 
-  const formatDate = useCallback((d) => { if (!d) return ''; return new Date(d).toISOString().split('T')[0]; }, []);
+  const formatDate = useCallback((d) => { 
+    if (!d) return ''; 
+    const date = new Date(d);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
   const getScheduleKey = useCallback((date, child, period) => `${formatDate(date)}_${child}_${period}`, [formatDate]);
   const getTurnoKey = useCallback((date) => formatDate(date), [formatDate]);
 
