@@ -442,12 +442,12 @@ const CoParentingApp = () => {
             {(children[childFilter] || 'Hermana').toUpperCase()}
           </div>
         )}
-        <div className="grid" style={{ gridTemplateColumns: isParentUser ? '45px repeat(7, 1fr)' : '50px repeat(7, 1fr)', gap: 2, fontSize: 9 }}>
+        <div className="grid" style={{ gridTemplateColumns: isParentUser ? '45px repeat(7, 1fr)' : '40px repeat(7, 1fr)', gap: 1, fontSize: 9 }}>
           {showHeader && (
             <>
               <div />
               {weekDates.map((d, i) => (
-                <div key={formatDate(d)} className="text-center font-bold text-[10px]">{daysOfWeek[i]} {d.getDate()}</div>
+                <div key={formatDate(d)} className="text-center font-bold text-[9px]">{daysOfWeek[i]} {d.getDate()}</div>
               ))}
             </>
           )}
@@ -455,31 +455,31 @@ const CoParentingApp = () => {
           {showTurnos && (
             <>
               {/* Fila turno padre */}
-              <div className="font-bold text-[8px] flex items-center" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
+              <div className="font-bold text-[7px] flex items-center" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
               {weekDates.map((d) => {
                 const turnoKey = getTurnoKey(d);
                 const turno = turnos[`${turnoKey}_padre`] || '';
                 const { codigo, horario } = parseTurnoPadre(turno);
                 return (
                   <div key={`tp_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: turno ? colors.parent1 + '40' : '#f3f4f6', color: colors.parent1 }}>
-                    <div className="text-[8px] font-bold">{codigo}</div>
-                    {horario && <div className="text-[6px]">{horario}</div>}
+                    <div className="text-[7px] font-bold">{codigo}</div>
+                    {horario && <div className="text-[5px]">{horario}</div>}
                   </div>
                 );
               })}
               {/* Fila turno madre */}
-              <div className="font-bold text-[8px] flex items-center" style={{ color: '#065f46' }}>{parents.parent2 || 'Madre'}</div>
+              <div className="font-bold text-[7px] flex items-center" style={{ color: '#065f46' }}>{parents.parent2 || 'Madre'}</div>
               {weekDates.map((d) => {
                 const turnoKey = getTurnoKey(d);
                 const turno = turnos[`${turnoKey}_madre`] || '';
                 const parsed = parseTurnoMadre(turno);
                 return (
                   <div key={`tm_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: turno ? colors.parent2 + '40' : '#f3f4f6', color: '#065f46' }}>
-                    {parsed.length === 0 && <div className="text-[8px]">-</div>}
+                    {parsed.length === 0 && <div className="text-[7px]">-</div>}
                     {parsed.map((t, idx) => (
                       <div key={idx}>
-                        <div className="text-[8px] font-bold">{t.tipo}</div>
-                        <div className="text-[6px]">{t.entrada}-{t.salida}</div>
+                        <div className="text-[7px] font-bold">{t.tipo}</div>
+                        <div className="text-[5px]">{t.entrada}-{t.salida}</div>
                       </div>
                     ))}
                   </div>
@@ -490,10 +490,10 @@ const CoParentingApp = () => {
           
           {periods.map((period) => (
             <React.Fragment key={period}>
-              <div className="font-bold text-[10px] flex items-center">{period}</div>
+              <div className="font-bold text-[9px] flex items-center">{period}</div>
               {weekDates.map((d) => {
                 return (
-                  <div key={`${formatDate(d)}_${period}`} className="border rounded p-0.5 min-h-[32px] flex flex-col items-center justify-center gap-0.5">
+                  <div key={`${formatDate(d)}_${period}`} className="border rounded p-0.5 min-h-[28px] flex flex-col items-center justify-center gap-0.5">
                     {isParentUser && ['child1', 'child2'].map((child) => {
                       const sk = getScheduleKey(d, child, period);
                       const assigned = schedule[sk];
@@ -502,7 +502,7 @@ const CoParentingApp = () => {
                       const displayName = isWithThisParent ? (children[child] || (child === 'child1' ? 'H1' : 'H2')) : '-';
                       return (
                         <div key={sk} onClick={() => obs && setPopupObs(obs)}
-                          className="text-[9px] text-center rounded px-1 cursor-pointer font-bold w-full"
+                          className="text-[8px] text-center rounded px-0.5 cursor-pointer font-bold w-full"
                           style={{ backgroundColor: isWithThisParent ? colors[child] : '#e5e7eb', color: isWithThisParent ? '#000' : '#999' }}>
                           {displayName}{obs && '*'}
                         </div>
@@ -517,7 +517,7 @@ const CoParentingApp = () => {
                       const displayName = assigned ? (assigned === 'parent1' ? 'Papá' : assigned === 'parent2' ? 'Mamá' : parents.other || 'Otro') : '-';
                       return (
                         <div onClick={() => obs && setPopupObs(obs)}
-                          className="text-[11px] text-center rounded px-1 py-0.5 cursor-pointer font-bold"
+                          className="text-[9px] text-center rounded px-0.5 py-0.5 cursor-pointer font-bold"
                           style={{ backgroundColor: assigned ? colors[assigned] : '#e5e7eb', color: assigned ? '#000' : '#888' }}>
                           {displayName}{obs && '*'}
                         </div>
@@ -633,6 +633,7 @@ const CoParentingApp = () => {
     const isChildUser = currentUser === 'child1' || currentUser === 'child2';
     const isParentUser = currentUser === 'parent1' || currentUser === 'parent2';
     const childName = isChildUser ? (children[currentUser] || 'Hijo').toUpperCase() : '';
+    const childColor = isChildUser ? colors[currentUser] : '';
 
     // Función para obtener iniciales del nombre (JL para Jose Luis, Ire para Irene)
     const getIniciales = (nombre, isParent1) => {
@@ -668,19 +669,62 @@ const CoParentingApp = () => {
     const inicialesPadre = getIniciales(parents.parent1, true);
     const inicialesMadre = getIniciales(parents.parent2, false);
 
+    // Si es hijo, usar vista grande como ChildMonthView
+    if (isChildUser) {
+      return (
+        <div className="p-0.5 h-full flex flex-col">
+          <div className="flex items-center justify-between mb-0.5">
+            <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-0.5"><ChevronLeft size={14} /></button>
+            <div className="text-xs font-medium">
+              <span style={{ color: childColor }}>{childName}</span> - {capitalize(monthLabel)}
+            </div>
+            <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-0.5"><ChevronRight size={14} /></button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <div className="grid h-full" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: `14px repeat(${numRows}, 1fr)`, gap: 2 }}>
+              {daysOfWeek.map(d => <div key={d} className="text-[8px] font-bold text-center">{d}</div>)}
+              {monthDates.map((date, idx) => {
+                const dateKey = date ? formatDate(date) : `empty-${idx}`;
+                if (!date) return <div key={dateKey} className="border rounded bg-gray-50" />;
+
+                return (
+                  <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden">
+                    <div className="font-bold text-[9px] mb-0.5">{date.getDate()}</div>
+                    <div className="flex-1 flex flex-col gap-0.5">
+                      {periods.map((period) => {
+                        const ck = getScheduleKey(date, currentUser, period);
+                        const assigned = schedule[ck];
+                        let bg = '#e5e7eb';
+                        let txt = '-';
+                        if (assigned === 'parent1') { bg = colors.parent1; txt = 'Papá'; }
+                        else if (assigned === 'parent2') { bg = colors.parent2; txt = 'Mamá'; }
+                        else if (assigned === 'other') { bg = colors.other; txt = parents.other || 'Otro'; }
+                        return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[7px]" style={{ backgroundColor: bg }}>{txt}</div>;
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Vista para padres (con turnos)
     return (
-      <div className="p-1">
-        <div className="flex items-center justify-between mb-1">
+      <div className="p-2">
+        <div className="flex items-center justify-between mb-2">
           <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={18} /></button>
-          <div className="text-sm font-medium">{isChildUser ? `${childName}  ${capitalize(monthLabel)}` : capitalize(monthLabel)}</div>
+          <div className="text-sm font-medium">{capitalize(monthLabel)}</div>
           <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={18} /></button>
         </div>
         <div>
-          <div className="grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
-            {daysOfWeek.map(d => <div key={d} className="text-[8px] font-bold text-center py-0.5">{d}</div>)}
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+            {daysOfWeek.map(d => <div key={d} className="text-[9px] font-bold text-center py-1">{d}</div>)}
             {monthDates.map((date, idx) => {
               const dateKey = date ? formatDate(date) : `empty-${idx}`;
-              if (!date) return <div key={dateKey} className="border rounded bg-gray-50 min-h-[48px]" />;
+              if (!date) return <div key={dateKey} className="border rounded bg-gray-50 min-h-[52px]" />;
               
               const turnoKey = getTurnoKey(date);
               const turnoPadre = turnos[`${turnoKey}_padre`] || '';
@@ -689,58 +733,43 @@ const CoParentingApp = () => {
               const turnoMadreCorto = getTurnoMadreCorto(turnoMadre);
 
               return (
-                <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden min-h-[48px]">
+                <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden min-h-[52px]">
                   {/* Cabecera con número y turnos */}
                   <div className="flex" style={{ fontSize: 6, lineHeight: '8px' }}>
                     {/* Número del día */}
                     <span className="font-bold text-[9px] mr-0.5">{date.getDate()}</span>
                     
                     {/* Turnos de los padres */}
-                    {isParentUser && (
-                      <div className="flex-1 flex flex-col text-[6px]">
-                        <div className="flex justify-between" style={{ color: colors.parent1 }}>
-                          <span className="font-bold">{inicialesPadre}</span>
-                          <span className="font-bold">{codP || '-'}</span>
-                        </div>
-                        <div className="flex justify-between" style={{ color: '#065f46' }}>
-                          <span className="font-bold">{inicialesMadre}</span>
-                          <span className="font-bold">{turnoMadreCorto || '-'}</span>
-                        </div>
+                    <div className="flex-1 flex flex-col text-[6px]">
+                      <div className="flex justify-between" style={{ color: colors.parent1 }}>
+                        <span className="font-bold">{inicialesPadre}</span>
+                        <span className="font-bold">{codP || '-'}</span>
                       </div>
-                    )}
+                      <div className="flex justify-between" style={{ color: '#065f46' }}>
+                        <span className="font-bold">{inicialesMadre}</span>
+                        <span className="font-bold">{turnoMadreCorto || '-'}</span>
+                      </div>
+                    </div>
                   </div>
                   
                   {/* Asignaciones */}
                   <div className="flex-1 flex flex-col gap-0.5 mt-0.5">
                     {periods.map((period) => {
-                      if (isParentUser) {
-                        const c1k = getScheduleKey(date, 'child1', period);
-                        const c2k = getScheduleKey(date, 'child2', period);
-                        const c1a = schedule[c1k] === currentUser;
-                        const c2a = schedule[c2k] === currentUser;
-                        
-                        return (
-                          <div key={`${dateKey}_${period}`} className="flex gap-0.5 flex-1">
-                            <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c1a ? colors.child1 : '#e5e7eb' }}>
-                              {c1a ? (children.child1 || 'H1')[0] : '-'}
-                            </div>
-                            <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c2a ? colors.child2 : '#e5e7eb' }}>
-                              {c2a ? (children.child2 || 'H2')[0] : '-'}
-                            </div>
+                      const c1k = getScheduleKey(date, 'child1', period);
+                      const c2k = getScheduleKey(date, 'child2', period);
+                      const c1a = schedule[c1k] === currentUser;
+                      const c2a = schedule[c2k] === currentUser;
+                      
+                      return (
+                        <div key={`${dateKey}_${period}`} className="flex gap-0.5 flex-1">
+                          <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c1a ? colors.child1 : '#e5e7eb' }}>
+                            {c1a ? (children.child1 || 'H1')[0] : '-'}
                           </div>
-                        );
-                      }
-                      if (isChildUser) {
-                        const ck = getScheduleKey(date, currentUser, period);
-                        const assigned = schedule[ck];
-                        let bg = '#e5e7eb';
-                        let txt = '-';
-                        if (assigned === 'parent1') { bg = colors.parent1; txt = 'Papá'; }
-                        else if (assigned === 'parent2') { bg = colors.parent2; txt = 'Mamá'; }
-                        else if (assigned === 'other') { bg = colors.other; txt = parents.other || 'Otro'; }
-                        return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[6px]" style={{ backgroundColor: bg }}>{txt}</div>;
-                      }
-                      return null;
+                          <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c2a ? colors.child2 : '#e5e7eb' }}>
+                            {c2a ? (children.child2 || 'H2')[0] : '-'}
+                          </div>
+                        </div>
+                      );
                     })}
                   </div>
                 </div>
@@ -979,7 +1008,7 @@ const CoParentingApp = () => {
                       if (assigned === 'parent1') { bg = colors.parent1; txt = 'Papá'; }
                       else if (assigned === 'parent2') { bg = colors.parent2; txt = 'Mamá'; }
                       else if (assigned === 'other') { bg = colors.other; txt = parents.other || 'Otro'; }
-                      return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[6px]" style={{ backgroundColor: bg }}>{txt}</div>;
+                      return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[7px]" style={{ backgroundColor: bg }}>{txt}</div>;
                     })}
                   </div>
                 </div>
