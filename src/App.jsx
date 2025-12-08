@@ -669,18 +669,18 @@ const CoParentingApp = () => {
     const inicialesMadre = getIniciales(parents.parent2, false);
 
     return (
-      <div className="p-2">
-        <div className="flex items-center justify-between mb-2">
+      <div className="p-1">
+        <div className="flex items-center justify-between mb-1">
           <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={18} /></button>
           <div className="text-sm font-medium">{isChildUser ? `${childName}  ${capitalize(monthLabel)}` : capitalize(monthLabel)}</div>
           <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={18} /></button>
         </div>
         <div>
-          <div className="grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
-            {daysOfWeek.map(d => <div key={d} className="text-[9px] font-bold text-center py-1">{d}</div>)}
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
+            {daysOfWeek.map(d => <div key={d} className="text-[8px] font-bold text-center py-0.5">{d}</div>)}
             {monthDates.map((date, idx) => {
               const dateKey = date ? formatDate(date) : `empty-${idx}`;
-              if (!date) return <div key={dateKey} className="border rounded bg-gray-50 min-h-[52px]" />;
+              if (!date) return <div key={dateKey} className="border rounded bg-gray-50 min-h-[48px]" />;
               
               const turnoKey = getTurnoKey(date);
               const turnoPadre = turnos[`${turnoKey}_padre`] || '';
@@ -689,7 +689,7 @@ const CoParentingApp = () => {
               const turnoMadreCorto = getTurnoMadreCorto(turnoMadre);
 
               return (
-                <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden min-h-[52px]">
+                <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden min-h-[48px]">
                   {/* Cabecera con número y turnos */}
                   <div className="flex" style={{ fontSize: 6, lineHeight: '8px' }}>
                     {/* Número del día */}
@@ -738,7 +738,7 @@ const CoParentingApp = () => {
                         if (assigned === 'parent1') { bg = colors.parent1; txt = 'Papá'; }
                         else if (assigned === 'parent2') { bg = colors.parent2; txt = 'Mamá'; }
                         else if (assigned === 'other') { bg = colors.other; txt = parents.other || 'Otro'; }
-                        return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[7px]" style={{ backgroundColor: bg }}>{txt}</div>;
+                        return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[6px]" style={{ backgroundColor: bg }}>{txt}</div>;
                       }
                       return null;
                     })}
@@ -979,7 +979,7 @@ const CoParentingApp = () => {
                       if (assigned === 'parent1') { bg = colors.parent1; txt = 'Papá'; }
                       else if (assigned === 'parent2') { bg = colors.parent2; txt = 'Mamá'; }
                       else if (assigned === 'other') { bg = colors.other; txt = parents.other || 'Otro'; }
-                      return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[7px]" style={{ backgroundColor: bg }}>{txt}</div>;
+                      return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[6px]" style={{ backgroundColor: bg }}>{txt}</div>;
                     })}
                   </div>
                 </div>
