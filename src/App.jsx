@@ -368,7 +368,7 @@ const CoParentingApp = () => {
         
         {/* Turnos de trabajo */}
         {(currentUser === 'parent1' || currentUser === 'parent2') && (
-          <div className="mb-1.5 p-1.5 border rounded bg-gray-50">
+          <div className="mb-1 p-1.5 border rounded bg-gray-50">
             <div className="text-[10px] font-bold mb-1">Turnos de trabajo</div>
             <div className="flex gap-2">
               <div className="flex-1">
@@ -388,8 +388,8 @@ const CoParentingApp = () => {
           </div>
         )}
         
-        {/* Franjas Mañana/Tarde/Noche */}
-        <div className="flex-1 flex flex-col gap-1 min-h-0">
+        {/* Franjas Mañana/Tarde/Noche - reducido el gap */}
+        <div className="flex-1 flex flex-col gap-0.5 min-h-0">
           {periods.map((period) => (
             <div key={period} className="flex-1 border rounded p-1 flex flex-col min-h-0">
               <div className="text-[10px] font-bold uppercase mb-0.5">{period}</div>
@@ -577,6 +577,86 @@ const CoParentingApp = () => {
     );
   };
 
+  // Calendario semanal de la madre (muestra lo que ve ella)
+  const MotherWeekCalendar = () => {
+    const weekDates = getWeekDates(currentDate);
+    
+    return (
+      <div className="mb-2 border-t-2 pt-2">
+        <div className="text-[10px] font-bold text-center mb-1" style={{ color: '#065f46' }}>
+          CALENDARIO {(parents.parent2 || 'MADRE').toUpperCase()}
+        </div>
+        <div className="grid" style={{ gridTemplateColumns: '45px repeat(7, 1fr)', gap: 1, fontSize: 9 }}>
+          {/* Cabecera días */}
+          <div />
+          {weekDates.map((d, i) => (
+            <div key={formatDate(d)} className="text-center font-bold text-[9px]">{daysOfWeek[i]} {d.getDate()}</div>
+          ))}
+          
+          {/* Filas de turnos */}
+          <div className="font-bold text-[7px] flex items-center" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
+          {weekDates.map((d) => {
+            const turnoKey = getTurnoKey(d);
+            const turno = turnos[`${turnoKey}_padre`] || '';
+            const { codigo, horario } = parseTurnoPadre(turno);
+            return (
+              <div key={`tp_m_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: turno ? colors.parent1 + '40' : '#f3f4f6', color: colors.parent1 }}>
+                <div className="text-[7px] font-bold">{codigo}</div>
+                {horario && <div className="text-[5px]">{horario}</div>}
+              </div>
+            );
+          })}
+          
+          <div className="font-bold text-[7px] flex items-center" style={{ color: '#065f46' }}>{parents.parent2 || 'Madre'}</div>
+          {weekDates.map((d) => {
+            const turnoKey = getTurnoKey(d);
+            const turno = turnos[`${turnoKey}_madre`] || '';
+            const parsed = parseTurnoMadre(turno);
+            return (
+              <div key={`tm_m_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: turno ? colors.parent2 + '40' : '#f3f4f6', color: '#065f46' }}>
+                {parsed.length === 0 && <div className="text-[7px]">-</div>}
+                {parsed.map((t, idx) => (
+                  <div key={idx}>
+                    <div className="text-[7px] font-bold">{t.tipo}</div>
+                    <div className="text-[5px]">{t.entrada}-{t.salida}</div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          
+          {/* Filas de periodos - mostrando lo que tiene la madre */}
+          {periods.map((period) => (
+            <React.Fragment key={period}>
+              <div className="font-bold text-[9px] flex items-center">{period}</div>
+              {weekDates.map((d) => {
+                return (
+                  <div key={`${formatDate(d)}_${period}_mother`} className="border rounded p-0.5 min-h-[28px] flex flex-col items-center justify-center gap-0.5">
+                    {['child1', 'child2'].map((child) => {
+                      const sk = getScheduleKey(d, child, period);
+                      const assigned = schedule[sk];
+                      const obs = notes[sk] || '';
+                      // Para el calendario de la madre, mostramos si está con ella (parent2)
+                      const isWithMother = assigned === 'parent2';
+                      const displayName = isWithMother ? (children[child] || (child === 'child1' ? 'H1' : 'H2')) : '-';
+                      return (
+                        <div key={sk} onClick={() => obs && setPopupObs(obs)}
+                          className="text-[8px] text-center rounded px-0.5 cursor-pointer font-bold w-full"
+                          style={{ backgroundColor: isWithMother ? colors[child] : '#e5e7eb', color: isWithMother ? '#000' : '#999' }}>
+                          {displayName}{obs && '*'}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const WeekView = () => {
     const weekDates = getWeekDates(currentDate);
     const weekNumber = getWeekNumber(weekDates[0]);
@@ -610,6 +690,8 @@ const CoParentingApp = () => {
 
     const parentName = currentUser === 'parent1' ? parents.parent1 : parents.parent2;
     const parentColor = colors[currentUser];
+    const isParent1 = currentUser === 'parent1';
+    
     return (
       <div className="p-1" style={{ fontSize: 10 }}>
         <div className="flex items-center justify-between mb-1">
@@ -622,6 +704,8 @@ const CoParentingApp = () => {
         </div>
         <WeekCalendar showTurnos={true} />
         <GlobalWeekCalendar />
+        {/* Calendario de la madre - SOLO para el padre (parent1) */}
+        {isParent1 && <MotherWeekCalendar />}
       </div>
     );
   };
@@ -759,6 +843,109 @@ const CoParentingApp = () => {
                       const c2k = getScheduleKey(date, 'child2', period);
                       const c1a = schedule[c1k] === currentUser;
                       const c2a = schedule[c2k] === currentUser;
+                      
+                      return (
+                        <div key={`${dateKey}_${period}`} className="flex gap-0.5 flex-1">
+                          <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c1a ? colors.child1 : '#e5e7eb' }}>
+                            {c1a ? (children.child1 || 'H1')[0] : '-'}
+                          </div>
+                          <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c2a ? colors.child2 : '#e5e7eb' }}>
+                            {c2a ? (children.child2 || 'H2')[0] : '-'}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Vista mensual de la madre (para el botón Irene del padre)
+  const MotherMonthView = () => {
+    const monthDates = getMonthDates(currentDate);
+    const monthLabel = currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+
+    // Función para obtener iniciales del nombre
+    const getIniciales = (nombre, isParent1) => {
+      if (!nombre) return isParent1 ? 'P' : 'M';
+      if (isParent1) {
+        return nombre.split(' ').map(p => p[0]).join('').toUpperCase();
+      } else {
+        return nombre.substring(0, 3);
+      }
+    };
+
+    // Función para obtener texto corto del turno madre
+    const getTurnoMadreCorto = (turnoStr) => {
+      if (!turnoStr) return '';
+      const parsed = parseTurnoMadre(turnoStr);
+      if (parsed.length === 0) return '';
+      const abreviar = (tipo) => {
+        if (!tipo) return '';
+        if (tipo.toLowerCase().startsWith('mañ')) return 'M';
+        if (tipo.toLowerCase().startsWith('tar')) return 'T';
+        if (tipo.toLowerCase().startsWith('noc')) return 'N';
+        return tipo[0].toUpperCase();
+      };
+      if (parsed.length === 1) return abreviar(parsed[0].tipo);
+      return parsed.map(t => abreviar(t.tipo)).filter(t => t).join('/');
+    };
+
+    const inicialesPadre = getIniciales(parents.parent1, true);
+    const inicialesMadre = getIniciales(parents.parent2, false);
+
+    return (
+      <div className="p-2">
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={18} /></button>
+          <div className="text-sm font-medium">
+            <span style={{ color: '#065f46' }}>{(parents.parent2 || 'Madre').toUpperCase()}</span> - {capitalize(monthLabel)}
+          </div>
+          <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={18} /></button>
+        </div>
+        <div>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+            {daysOfWeek.map(d => <div key={d} className="text-[9px] font-bold text-center py-1">{d}</div>)}
+            {monthDates.map((date, idx) => {
+              const dateKey = date ? formatDate(date) : `empty-${idx}`;
+              if (!date) return <div key={dateKey} className="border rounded bg-gray-50 min-h-[52px]" />;
+              
+              const turnoKey = getTurnoKey(date);
+              const turnoPadre = turnos[`${turnoKey}_padre`] || '';
+              const turnoMadre = turnos[`${turnoKey}_madre`] || '';
+              const { codigo: codP } = parseTurnoPadre(turnoPadre);
+              const turnoMadreCorto = getTurnoMadreCorto(turnoMadre);
+
+              return (
+                <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden min-h-[52px]">
+                  {/* Cabecera con número y turnos */}
+                  <div className="flex" style={{ fontSize: 6, lineHeight: '8px' }}>
+                    <span className="font-bold text-[9px] mr-0.5">{date.getDate()}</span>
+                    <div className="flex-1 flex flex-col text-[6px]">
+                      <div className="flex justify-between" style={{ color: colors.parent1 }}>
+                        <span className="font-bold">{inicialesPadre}</span>
+                        <span className="font-bold">{codP || '-'}</span>
+                      </div>
+                      <div className="flex justify-between" style={{ color: '#065f46' }}>
+                        <span className="font-bold">{inicialesMadre}</span>
+                        <span className="font-bold">{turnoMadreCorto || '-'}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Asignaciones - mostrando lo que tiene la madre (parent2) */}
+                  <div className="flex-1 flex flex-col gap-0.5 mt-0.5">
+                    {periods.map((period) => {
+                      const c1k = getScheduleKey(date, 'child1', period);
+                      const c2k = getScheduleKey(date, 'child2', period);
+                      // Aquí mostramos si está con la madre (parent2)
+                      const c1a = schedule[c1k] === 'parent2';
+                      const c2a = schedule[c2k] === 'parent2';
                       
                       return (
                         <div key={`${dateKey}_${period}`} className="flex gap-0.5 flex-1">
@@ -1030,43 +1217,71 @@ const CoParentingApp = () => {
         <button onClick={handleProfileClick} className={`text-xs px-2 py-1 rounded border-2 font-medium ${isChild ? 'cursor-default' : 'cursor-pointer'}`}
           style={{ borderColor: profileBorder, backgroundColor: 'white', color: topBarColor }}>{displayName}</button>
       </div>
-      <div className="flex gap-1.5 p-2 border-b">
-        {/* Botón Día - SOLO para padre (parent1) */}
-        {isParent1 && (
-          <button onClick={() => setCurrentView('daily')} className={`px-3 py-1.5 text-sm rounded flex items-center gap-1 ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-            <Calendar size={14} /> Día
-          </button>
-        )}
-        <button onClick={() => setCurrentView('week')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-          {isParent1 ? 'Sem' : 'Semana'}
-        </button>
-        <button onClick={() => setCurrentView('month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Mes</button>
-        {/* Botones vista mensual hijos - para padre y madre */}
-        {isParent && (
-          <>
-            <button onClick={() => setCurrentView('child1month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'child1month' ? 'text-white' : 'bg-gray-100'}`}
-              style={{ backgroundColor: currentView === 'child1month' ? colors.child1 : undefined, color: currentView === 'child1month' ? '#000' : undefined }}>
+      
+      {/* Botones de navegación - DOS FILAS PARA PADRE (parent1) */}
+      {isParent1 ? (
+        <div className="flex flex-col gap-1 p-1.5 border-b">
+          {/* Primera fila: Día, Sem, Mes, Estadísticas */}
+          <div className="flex gap-1">
+            <button onClick={() => setCurrentView('daily')} className={`px-2.5 py-1 text-xs rounded flex items-center gap-1 ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+              <Calendar size={12} /> Día
+            </button>
+            <button onClick={() => setCurrentView('week')} className={`px-2.5 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+              Sem
+            </button>
+            <button onClick={() => setCurrentView('month')} className={`px-2.5 py-1 text-xs rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+              Mes
+            </button>
+            <button onClick={() => setCurrentView('stats')} className={`px-2 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+              <BarChart3 size={14} />
+            </button>
+          </div>
+          {/* Segunda fila: Irene, Denia, Elsa */}
+          <div className="flex gap-1">
+            <button onClick={() => setCurrentView('motherMonth')} className={`px-2.5 py-1 text-xs rounded ${currentView === 'motherMonth' ? 'text-white' : 'bg-gray-100'}`}
+              style={{ backgroundColor: currentView === 'motherMonth' ? colors.parent2 : undefined, color: currentView === 'motherMonth' ? '#065f46' : '#065f46', fontWeight: 'bold' }}>
+              {parents.parent2 || 'Madre'}
+            </button>
+            <button onClick={() => setCurrentView('child1month')} className={`px-2.5 py-1 text-xs rounded ${currentView === 'child1month' ? 'text-white' : 'bg-gray-100'}`}
+              style={{ backgroundColor: currentView === 'child1month' ? colors.child1 : undefined, color: currentView === 'child1month' ? '#000' : undefined, fontWeight: currentView === 'child1month' ? 'bold' : undefined }}>
               {children.child1 || 'Hijo 1'}
             </button>
-            <button onClick={() => setCurrentView('child2month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
-              style={{ backgroundColor: currentView === 'child2month' ? colors.child2 : undefined, color: currentView === 'child2month' ? '#000' : undefined }}>
+            <button onClick={() => setCurrentView('child2month')} className={`px-2.5 py-1 text-xs rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
+              style={{ backgroundColor: currentView === 'child2month' ? colors.child2 : undefined, color: currentView === 'child2month' ? '#000' : undefined, fontWeight: currentView === 'child2month' ? 'bold' : undefined }}>
               {children.child2 || 'Hijo 2'}
             </button>
-          </>
-        )}
-        {/* Estadísticas - SOLO para padre (parent1) */}
-        {isParent1 && (
-          <button onClick={() => setCurrentView('stats')} className={`px-2 py-1.5 text-sm rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-            <BarChart3 size={16} />
+          </div>
+        </div>
+      ) : (
+        /* Botones normales para madre e hijos */
+        <div className="flex gap-1.5 p-2 border-b">
+          <button onClick={() => setCurrentView('week')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            Semana
           </button>
-        )}
-      </div>
+          <button onClick={() => setCurrentView('month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Mes</button>
+          {/* Botones vista mensual hijos - para madre */}
+          {isParent2 && (
+            <>
+              <button onClick={() => setCurrentView('child1month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'child1month' ? 'text-white' : 'bg-gray-100'}`}
+                style={{ backgroundColor: currentView === 'child1month' ? colors.child1 : undefined, color: currentView === 'child1month' ? '#000' : undefined }}>
+                {children.child1 || 'Hijo 1'}
+              </button>
+              <button onClick={() => setCurrentView('child2month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
+                style={{ backgroundColor: currentView === 'child2month' ? colors.child2 : undefined, color: currentView === 'child2month' ? '#000' : undefined }}>
+                {children.child2 || 'Hijo 2'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      
       <div className="flex-1 overflow-y-auto">
         {currentView === 'daily' && <DailyView />}
         {currentView === 'week' && <WeekView />}
         {currentView === 'month' && <MonthView />}
         {currentView === 'child1month' && <ChildMonthView childKey="child1" />}
         {currentView === 'child2month' && <ChildMonthView childKey="child2" />}
+        {currentView === 'motherMonth' && <MotherMonthView />}
         {currentView === 'stats' && <StatsView />}
       </div>
       {popupObs && (
