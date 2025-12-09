@@ -1218,39 +1218,33 @@ const CoParentingApp = () => {
           style={{ borderColor: profileBorder, backgroundColor: 'white', color: topBarColor }}>{displayName}</button>
       </div>
       
-      {/* Botones de navegación - DOS FILAS PARA PADRE (parent1) */}
+      {/* Botones de navegación - UNA SOLA FILA PARA PADRE (parent1) */}
       {isParent1 ? (
-        <div className="flex flex-col gap-1 p-1.5 border-b">
-          {/* Primera fila: Día, Sem, Mes, Estadísticas */}
-          <div className="flex gap-1">
-            <button onClick={() => setCurrentView('daily')} className={`px-2.5 py-1 text-xs rounded flex items-center gap-1 ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-              <Calendar size={12} /> Día
-            </button>
-            <button onClick={() => setCurrentView('week')} className={`px-2.5 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-              Sem
-            </button>
-            <button onClick={() => setCurrentView('month')} className={`px-2.5 py-1 text-xs rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-              Mes
-            </button>
-            <button onClick={() => setCurrentView('stats')} className={`px-2 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-              <BarChart3 size={14} />
-            </button>
-          </div>
-          {/* Segunda fila: Irene, Denia, Elsa */}
-          <div className="flex gap-1">
-            <button onClick={() => setCurrentView('motherMonth')} className={`px-2.5 py-1 text-xs rounded ${currentView === 'motherMonth' ? 'text-white' : 'bg-gray-100'}`}
-              style={{ backgroundColor: currentView === 'motherMonth' ? colors.parent2 : undefined, color: currentView === 'motherMonth' ? '#065f46' : '#065f46', fontWeight: 'bold' }}>
-              {parents.parent2 || 'Madre'}
-            </button>
-            <button onClick={() => setCurrentView('child1month')} className={`px-2.5 py-1 text-xs rounded ${currentView === 'child1month' ? 'text-white' : 'bg-gray-100'}`}
-              style={{ backgroundColor: currentView === 'child1month' ? colors.child1 : undefined, color: currentView === 'child1month' ? '#000' : undefined, fontWeight: currentView === 'child1month' ? 'bold' : undefined }}>
-              {children.child1 || 'Hijo 1'}
-            </button>
-            <button onClick={() => setCurrentView('child2month')} className={`px-2.5 py-1 text-xs rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
-              style={{ backgroundColor: currentView === 'child2month' ? colors.child2 : undefined, color: currentView === 'child2month' ? '#000' : undefined, fontWeight: currentView === 'child2month' ? 'bold' : undefined }}>
-              {children.child2 || 'Hijo 2'}
-            </button>
-          </div>
+        <div className="flex gap-1 p-1.5 border-b">
+          <button onClick={() => setCurrentView('daily')} className={`px-2 py-1 text-xs rounded flex items-center gap-0.5 ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            <Calendar size={11} /> Día
+          </button>
+          <button onClick={() => setCurrentView('week')} className={`px-2 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            Sem
+          </button>
+          <button onClick={() => setCurrentView('month')} className={`px-2 py-1 text-xs rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            Mes
+          </button>
+          <button onClick={() => setCurrentView('motherMonth')} className={`px-2 py-1 text-xs rounded ${currentView === 'motherMonth' ? 'text-white' : 'bg-gray-100'}`}
+            style={{ backgroundColor: currentView === 'motherMonth' ? colors.parent2 : undefined, color: '#065f46', fontWeight: 'bold' }}>
+            {parents.parent2 || 'Madre'}
+          </button>
+          <button onClick={() => setCurrentView('child1month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child1month' ? 'text-white' : 'bg-gray-100'}`}
+            style={{ backgroundColor: currentView === 'child1month' ? colors.child1 : undefined, color: currentView === 'child1month' ? '#000' : undefined }}>
+            {children.child1 || 'Hijo 1'}
+          </button>
+          <button onClick={() => setCurrentView('child2month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
+            style={{ backgroundColor: currentView === 'child2month' ? colors.child2 : undefined, color: currentView === 'child2month' ? '#000' : undefined }}>
+            {children.child2 || 'Hijo 2'}
+          </button>
+          <button onClick={() => setCurrentView('stats')} className={`px-1.5 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            <BarChart3 size={14} />
+          </button>
         </div>
       ) : (
         /* Botones normales para madre e hijos */
