@@ -36,6 +36,55 @@ const CoParentingApp = () => {
 
   const [titleTapCount, setTitleTapCount] = useState(0);
 
+  // Festivos de Málaga 2025 (nacionales, autonómicos y locales)
+  const festivosMalaga2025 = [
+    '2025-01-01', // Año Nuevo
+    '2025-01-06', // Reyes
+    '2025-02-28', // Día de Andalucía
+    '2025-04-17', // Jueves Santo
+    '2025-04-18', // Viernes Santo
+    '2025-05-01', // Día del Trabajo
+    '2025-08-15', // Asunción de la Virgen
+    '2025-08-19', // Toma de Málaga (local)
+    '2025-09-08', // Virgen de la Victoria (local)
+    '2025-10-13', // Día de la Hispanidad (trasladado del domingo 12)
+    '2025-11-01', // Todos los Santos
+    '2025-12-06', // Día de la Constitución
+    '2025-12-08', // Inmaculada Concepción
+    '2025-12-25', // Navidad
+  ];
+
+  // Comprobar si una fecha es hoy
+  const isToday = (date) => {
+    if (!date) return false;
+    const today = new Date();
+    return date.getDate() === today.getDate() && 
+           date.getMonth() === today.getMonth() && 
+           date.getFullYear() === today.getFullYear();
+  };
+
+  // Comprobar si es fin de semana (sábado o domingo)
+  const isWeekend = (date) => {
+    if (!date) return false;
+    const day = date.getDay();
+    return day === 0 || day === 6; // 0 = domingo, 6 = sábado
+  };
+
+  // Comprobar si es festivo
+  const isHoliday = (date) => {
+    if (!date) return false;
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    return festivosMalaga2025.includes(dateStr);
+  };
+
+  // Comprobar si es fin de semana o festivo (para color rojo)
+  const isRedDay = (date) => {
+    return isWeekend(date) || isHoliday(date);
+  };
+
   const handleTitleTap = () => {
     const newCount = titleTapCount + 1;
     setTitleTapCount(newCount);
@@ -351,6 +400,8 @@ const CoParentingApp = () => {
     const monthName = monthsShort[currentDate.getMonth()];
     const turnoKey = getTurnoKey(currentDate);
     const turnoPadre = turnos[`${turnoKey}_padre`] || '';
+    const todayStyle = isToday(currentDate);
+    const redDay = isRedDay(currentDate);
 
     return (
       <div className="p-2 flex flex-col h-full overflow-hidden">
@@ -361,7 +412,10 @@ const CoParentingApp = () => {
             {isParent1User && (
               <button onClick={saveScheduleInSupabase} className="px-3 py-1 text-xs rounded bg-green-600 text-white font-bold mb-1">Guardar</button>
             )}
-            <div className="font-bold text-sm text-center">{dayName} {dayNum} {monthName}</div>
+            <div className={`font-bold text-sm text-center px-2 py-0.5 rounded ${todayStyle ? 'bg-black text-white' : ''}`}
+              style={{ color: todayStyle ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
+              {dayName} {dayNum} {monthName}
+            </div>
           </div>
           <button onClick={() => setCurrentDate(d => addDays(d, 1))} className="px-2 py-1 border rounded text-sm font-bold">▶</button>
         </div>
@@ -446,9 +500,17 @@ const CoParentingApp = () => {
           {showHeader && (
             <>
               <div />
-              {weekDates.map((d, i) => (
-                <div key={formatDate(d)} className="text-center font-bold text-[9px]">{daysOfWeek[i]} {d.getDate()}</div>
-              ))}
+              {weekDates.map((d, i) => {
+                const today = isToday(d);
+                const redDay = isRedDay(d);
+                return (
+                  <div key={formatDate(d)} 
+                    className={`text-center font-bold text-[9px] ${today ? 'bg-black text-white rounded px-0.5' : ''}`}
+                    style={{ color: today ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
+                    {daysOfWeek[i]} {d.getDate()}
+                  </div>
+                );
+              })}
             </>
           )}
           
@@ -545,9 +607,17 @@ const CoParentingApp = () => {
         <div className="text-[10px] font-bold text-center mb-1">CALENDARIO GLOBAL</div>
         <div className="grid" style={{ gridTemplateColumns: '50px repeat(7, 1fr)', gap: 2, fontSize: 8 }}>
           <div />
-          {weekDates.map((d, i) => (
-            <div key={formatDate(d)} className="text-center font-bold text-[9px]">{daysOfWeek[i]} {d.getDate()}</div>
-          ))}
+          {weekDates.map((d, i) => {
+            const today = isToday(d);
+            const redDay = isRedDay(d);
+            return (
+              <div key={formatDate(d)} 
+                className={`text-center font-bold text-[9px] ${today ? 'bg-black text-white rounded px-0.5' : ''}`}
+                style={{ color: today ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
+                {daysOfWeek[i]} {d.getDate()}
+              </div>
+            );
+          })}
           {periods.map((period) => (
             <React.Fragment key={period}>
               <div className="font-bold text-[9px] flex items-center">{period}</div>
@@ -589,9 +659,17 @@ const CoParentingApp = () => {
         <div className="grid" style={{ gridTemplateColumns: '45px repeat(7, 1fr)', gap: 1, fontSize: 9 }}>
           {/* Cabecera días */}
           <div />
-          {weekDates.map((d, i) => (
-            <div key={formatDate(d)} className="text-center font-bold text-[9px]">{daysOfWeek[i]} {d.getDate()}</div>
-          ))}
+          {weekDates.map((d, i) => {
+            const today = isToday(d);
+            const redDay = isRedDay(d);
+            return (
+              <div key={formatDate(d)} 
+                className={`text-center font-bold text-[9px] ${today ? 'bg-black text-white rounded px-0.5' : ''}`}
+                style={{ color: today ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
+                {daysOfWeek[i]} {d.getDate()}
+              </div>
+            );
+          })}
           
           {/* Filas de turnos */}
           <div className="font-bold text-[7px] flex items-center" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
@@ -770,10 +848,17 @@ const CoParentingApp = () => {
               {monthDates.map((date, idx) => {
                 const dateKey = date ? formatDate(date) : `empty-${idx}`;
                 if (!date) return <div key={dateKey} className="border rounded bg-gray-50" />;
+                const today = isToday(date);
+                const redDay = isRedDay(date);
 
                 return (
                   <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden">
-                    <div className="font-bold text-[9px] mb-0.5">{date.getDate()}</div>
+                    <div className="flex justify-start mb-0.5">
+                      <span className={`font-bold text-[9px] ${today ? 'bg-black text-white rounded-full w-4 h-4 flex items-center justify-center' : ''}`}
+                        style={{ color: today ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
+                        {date.getDate()}
+                      </span>
+                    </div>
                     <div className="flex-1 flex flex-col gap-0.5">
                       {periods.map((period) => {
                         const ck = getScheduleKey(date, currentUser, period);
@@ -821,7 +906,16 @@ const CoParentingApp = () => {
                   {/* Cabecera con número y turnos */}
                   <div className="flex" style={{ fontSize: 6, lineHeight: '8px' }}>
                     {/* Número del día */}
-                    <span className="font-bold text-[9px] mr-0.5">{date.getDate()}</span>
+                    {(() => {
+                      const today = isToday(date);
+                      const redDay = isRedDay(date);
+                      return (
+                        <span className={`font-bold text-[9px] mr-0.5 ${today ? 'bg-black text-white rounded-full w-4 h-4 flex items-center justify-center' : ''}`}
+                          style={{ color: today ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
+                          {date.getDate()}
+                        </span>
+                      );
+                    })()}
                     
                     {/* Turnos de los padres */}
                     <div className="flex-1 flex flex-col text-[6px]">
@@ -925,7 +1019,16 @@ const CoParentingApp = () => {
                 <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden min-h-[52px]">
                   {/* Cabecera con número y turnos */}
                   <div className="flex" style={{ fontSize: 6, lineHeight: '8px' }}>
-                    <span className="font-bold text-[9px] mr-0.5">{date.getDate()}</span>
+                    {(() => {
+                      const today = isToday(date);
+                      const redDay = isRedDay(date);
+                      return (
+                        <span className={`font-bold text-[9px] mr-0.5 ${today ? 'bg-black text-white rounded-full w-4 h-4 flex items-center justify-center' : ''}`}
+                          style={{ color: today ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
+                          {date.getDate()}
+                        </span>
+                      );
+                    })()}
                     <div className="flex-1 flex flex-col text-[6px]">
                       <div className="flex justify-between" style={{ color: colors.parent1 }}>
                         <span className="font-bold">{inicialesPadre}</span>
@@ -1182,10 +1285,17 @@ const CoParentingApp = () => {
             {monthDates.map((date, idx) => {
               const dateKey = date ? formatDate(date) : `empty-${idx}`;
               if (!date) return <div key={dateKey} className="border rounded bg-gray-50" />;
+              const today = isToday(date);
+              const redDay = isRedDay(date);
 
               return (
                 <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden">
-                  <div className="font-bold text-[9px] mb-0.5">{date.getDate()}</div>
+                  <div className="flex justify-start mb-0.5">
+                    <span className={`font-bold text-[9px] ${today ? 'bg-black text-white rounded-full w-4 h-4 flex items-center justify-center' : ''}`}
+                      style={{ color: today ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
+                      {date.getDate()}
+                    </span>
+                  </div>
                   <div className="flex-1 flex flex-col gap-0.5">
                     {periods.map((period) => {
                       const ck = getScheduleKey(date, childKey, period);
