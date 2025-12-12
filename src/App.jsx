@@ -844,7 +844,10 @@ const CoParentingApp = () => {
           </div>
           <div className="flex-1 overflow-hidden">
             <div className="grid h-full" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: `14px repeat(${numRows}, 1fr)`, gap: 2 }}>
-              {daysOfWeek.map(d => <div key={d} className="text-[8px] font-bold text-center">{d}</div>)}
+              {daysOfWeek.map((d, i) => (
+                <div key={d} className="text-[8px] font-bold text-center" 
+                  style={{ color: (i === 5 || i === 6) ? '#dc2626' : 'inherit' }}>{d}</div>
+              ))}
               {monthDates.map((date, idx) => {
                 const dateKey = date ? formatDate(date) : `empty-${idx}`;
                 if (!date) return <div key={dateKey} className="border rounded bg-gray-50" />;
@@ -890,7 +893,10 @@ const CoParentingApp = () => {
         </div>
         <div>
           <div className="grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
-            {daysOfWeek.map(d => <div key={d} className="text-[9px] font-bold text-center py-1">{d}</div>)}
+            {daysOfWeek.map((d, i) => (
+              <div key={d} className="text-[9px] font-bold text-center py-1" 
+                style={{ color: (i === 5 || i === 6) ? '#dc2626' : 'inherit' }}>{d}</div>
+            ))}
             {monthDates.map((date, idx) => {
               const dateKey = date ? formatDate(date) : `empty-${idx}`;
               if (!date) return <div key={dateKey} className="border rounded bg-gray-50 min-h-[52px]" />;
@@ -1004,7 +1010,10 @@ const CoParentingApp = () => {
         </div>
         <div>
           <div className="grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
-            {daysOfWeek.map(d => <div key={d} className="text-[9px] font-bold text-center py-1">{d}</div>)}
+            {daysOfWeek.map((d, i) => (
+              <div key={d} className="text-[9px] font-bold text-center py-1" 
+                style={{ color: (i === 5 || i === 6) ? '#dc2626' : 'inherit' }}>{d}</div>
+            ))}
             {monthDates.map((date, idx) => {
               const dateKey = date ? formatDate(date) : `empty-${idx}`;
               if (!date) return <div key={dateKey} className="border rounded bg-gray-50 min-h-[52px]" />;
@@ -1281,7 +1290,10 @@ const CoParentingApp = () => {
         </div>
         <div className="flex-1 overflow-hidden">
           <div className="grid h-full" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: `14px repeat(${Math.ceil(monthDates.length / 7)}, 1fr)`, gap: 2 }}>
-            {daysOfWeek.map(d => <div key={d} className="text-[8px] font-bold text-center">{d}</div>)}
+            {daysOfWeek.map((d, i) => (
+              <div key={d} className="text-[8px] font-bold text-center" 
+                style={{ color: (i === 5 || i === 6) ? '#dc2626' : 'inherit' }}>{d}</div>
+            ))}
             {monthDates.map((date, idx) => {
               const dateKey = date ? formatDate(date) : `empty-${idx}`;
               if (!date) return <div key={dateKey} className="border rounded bg-gray-50" />;
