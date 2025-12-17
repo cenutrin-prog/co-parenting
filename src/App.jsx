@@ -192,12 +192,32 @@ const CoParentingApp = () => {
   const loadScheduleFromSupabase = useCallback(async () => {
     try {
       // Cargar TODAS las asignaciones (Supabase por defecto limita a 1000)
-      const { data: asignaciones, error } = await supabase
-        .from('asignaciones')
-        .select('id, padre_id, hija_id, fecha, periodo, observaciones')
-        .range(0, 10000);  // Aumentar el límite para traer todas
-      if (error) console.error('Error cargando asignaciones:', error);
+      let allAsignaciones = [];
+      let desde = 0;
+      const limite = 1000;
+      let hayMas = true;
       
+      while (hayMas) {
+        const { data: asignaciones, error } = await supabase
+          .from('asignaciones')
+          .select('id, padre_id, hija_id, fecha, periodo, observaciones')
+          .range(desde, desde + limite - 1);
+        
+        if (error) {
+          console.error('Error cargando asignaciones:', error);
+          break;
+        }
+        
+        if (asignaciones && asignaciones.length > 0) {
+          allAsignaciones = [...allAsignaciones, ...asignaciones];
+          desde += limite;
+          hayMas = asignaciones.length === limite;
+        } else {
+          hayMas = false;
+        }
+      }
+      
+      const asignaciones = allAsignaciones;
       console.log('Asignaciones cargadas de BD:', asignaciones?.length || 0);
       console.log('Parents en app:', parents);
       console.log('Children en app:', children);
