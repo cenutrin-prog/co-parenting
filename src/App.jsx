@@ -28,7 +28,7 @@ const CoParentingApp = () => {
     'GL (08:00-08:00)', 'E4D (09:00-21:00)', 'E4N (21:00-09:00)', 'C2 (09:00-21:00)',
     'C4T (10:00-22:00)', 'C3D (08:15-20:15)', 'C3N (20:15-08:15)',
     'E1D (08:00-20:00)', 'E1N (20:00-08:00)', 'E1DN (08:00-08:00)',
-    'E2D (09:00-21:00)', 'E7D (11:00-23:00)', 'E7N (12:00-00:00)',
+    'E2D (09:00-21:00)', 'E7DN (11:00-23:00)', 'E7DN (12:00-00:00)',
     'E3DN (09:00-09:00)', 'E3D (09:00-21:00)', 'E3N (21:00-09:00)'
   ];
 
@@ -191,7 +191,11 @@ const CoParentingApp = () => {
 
   const loadScheduleFromSupabase = useCallback(async () => {
     try {
-      const { data: asignaciones, error } = await supabase.from('asignaciones').select('id, padre_id, hija_id, fecha, periodo, observaciones');
+      // Cargar TODAS las asignaciones (Supabase por defecto limita a 1000)
+      const { data: asignaciones, error } = await supabase
+        .from('asignaciones')
+        .select('id, padre_id, hija_id, fecha, periodo, observaciones')
+        .range(0, 10000);  // Aumentar el límite para traer todas
       if (error) console.error('Error cargando asignaciones:', error);
       
       console.log('Asignaciones cargadas de BD:', asignaciones?.length || 0);
