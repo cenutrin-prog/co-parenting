@@ -25,10 +25,17 @@ const CoParentingApp = () => {
 
   const turnosPadre = [
     'E5DN (09:00-09:00)', 'E5D (09:00-21:00)', 'E5N (21:00-09:00)', 'E4DN (09:00-09:00)',
-    'GL (08:00-08:00)', 'E4D (09-21:00)', 'E4N (21:00-09:00)', 'C2 (09:00-21:00)',
-    'C4T (10:00-22:00)', 'C3D (08:15-20:15)', 'C3N (20:15-08:15)', 'F.O. (09:00-15:00)',
-    'CURSO (08:00-15:00)', 'CURSO (15:00-22:00)', 'CURSO (08:00-22:00)', 'VIAJE DÍA ENTERO'
+    'GL (08:00-08:00)', 'E4D (09:00-21:00)', 'E4N (21:00-09:00)', 'C2 (09:00-21:00)',
+    'C4T (10:00-22:00)', 'C3D (08:15-20:15)', 'C3N (20:15-08:15)',
+    'E1D (08:00-20:00)', 'E1N (20:00-08:00)', 'E1DN (08:00-08:00)',
+    'E2D (09:00-21:00)', 'E7D (11:00-23:00)', 'E7N (12:00-00:00)',
+    'E3DN (09:00-09:00)', 'E3D (09:00-21:00)', 'E3N (21:00-09:00)'
   ];
+
+  // Tipos de actividad para el padre (segunda fila de desplegables)
+  const tiposActividadPadre = ['', 'CURSO', 'CLASE MÁSTER', 'F.O.', 'VIAJE', 'OTRO'];
+  const horasEntradaPadre = ['', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '21:00', '22:00', '23:00'];
+  const horasSalidaPadre = ['', '14:00', '14:30', '15:00', '15:30', '20:00', '20:30', '21:00', '21:30', '22:00', '22:30', '23:00', '00:00', '07:00', '08:00', '09:00'];
 
   const tiposTurnoMadre = ['', 'Mañana', 'Tarde', 'Noche'];
   const horasEntradaMadre = ['', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '21:00', '22:00', '23:00'];
@@ -151,6 +158,19 @@ const CoParentingApp = () => {
     return { codigo: turno, horario: '' };
   };
 
+  // Parsear actividad extra del padre (formato: "CURSO|09:00|15:00")
+  const parseActividadPadre = (actividad) => {
+    if (!actividad) return { tipo: '', entrada: '', salida: '' };
+    const [tipo, entrada, salida] = actividad.split('|');
+    return { tipo: tipo || '', entrada: entrada || '', salida: salida || '' };
+  };
+
+  // Construir string de actividad padre
+  const buildActividadPadre = (tipo, entrada, salida) => {
+    if (!tipo && !entrada && !salida) return '';
+    return `${tipo || ''}|${entrada || ''}|${salida || ''}`;
+  };
+
   // Parsear turno de la madre (formato: "Mañana|09:00|15:00;Tarde|17:00|21:00")
   const parseTurnoMadre = (turno) => {
     if (!turno) return [];
@@ -236,7 +256,12 @@ const CoParentingApp = () => {
       if (turnosData && turnosData.length > 0) {
         const newTurnos = {};
         turnosData.forEach(t => {
-          if (t.turno_padre) newTurnos[`${t.fecha}_padre`] = t.turno_padre;
+          if (t.turno_padre) {
+            // Separar turno y actividad si están unidos con "||"
+            const partes = t.turno_padre.split('||');
+            if (partes[0]) newTurnos[`${t.fecha}_padre`] = partes[0];
+            if (partes[1]) newTurnos[`${t.fecha}_padre_actividad`] = partes[1];
+          }
           if (t.turno_madre) newTurnos[`${t.fecha}_madre`] = t.turno_madre;
         });
         setTurnos(newTurnos);
@@ -315,15 +340,25 @@ const CoParentingApp = () => {
       turnoKeys.forEach(k => {
         const parts = k.split('_'); 
         const fecha = parts[0]; 
-        const quien = parts[1];
-        if (!turnosPorFecha[fecha]) turnosPorFecha[fecha] = {};
+        const quien = parts.slice(1).join('_'); // Puede ser "padre", "madre", o "padre_actividad"
+        if (!turnosPorFecha[fecha]) turnosPorFecha[fecha] = { turno_padre: null, turno_madre: null, actividad_padre: null };
         if (quien === 'padre') turnosPorFecha[fecha].turno_padre = turnos[k];
         if (quien === 'madre') turnosPorFecha[fecha].turno_madre = turnos[k];
+        if (quien === 'padre_actividad') turnosPorFecha[fecha].actividad_padre = turnos[k];
       });
       
-      const turnoUpserts = Object.entries(turnosPorFecha).map(([fecha, data]) => ({
-        fecha, turno_padre: data.turno_padre || null, turno_madre: data.turno_madre || null
-      }));
+      // Combinar turno_padre y actividad_padre separados por "||"
+      const turnoUpserts = Object.entries(turnosPorFecha).map(([fecha, data]) => {
+        let turnoPadreCompleto = data.turno_padre || '';
+        if (data.actividad_padre) {
+          turnoPadreCompleto = turnoPadreCompleto ? `${turnoPadreCompleto}||${data.actividad_padre}` : `||${data.actividad_padre}`;
+        }
+        return {
+          fecha, 
+          turno_padre: turnoPadreCompleto || null, 
+          turno_madre: data.turno_madre || null
+        };
+      });
       
       if (turnoUpserts.length > 0) {
         for (const t of turnoUpserts) {
@@ -343,6 +378,38 @@ const CoParentingApp = () => {
       console.error('Error inesperado:', err); 
       alert('Error al guardar: ' + (err.message || err)); 
     }
+  };
+
+  // Componente selector de actividad extra del padre (3 desplegables en 1 fila)
+  const ActividadPadreSelector = ({ fecha }) => {
+    const actividadActual = turnos[`${fecha}_padre_actividad`] || '';
+    const parsed = parseActividadPadre(actividadActual);
+
+    const updateActividad = (field, value) => {
+      const newActividad = buildActividadPadre(
+        field === 'tipo' ? value : parsed.tipo,
+        field === 'entrada' ? value : parsed.entrada,
+        field === 'salida' ? value : parsed.salida
+      );
+      setTurnos(prev => ({ ...prev, [`${fecha}_padre_actividad`]: newActividad }));
+    };
+
+    const selectStyle = "w-full text-[9px] p-0.5 border rounded";
+    const hasActividad = parsed.tipo || parsed.entrada || parsed.salida;
+
+    return (
+      <div className="flex gap-0.5 p-0.5 rounded mt-0.5" style={{ backgroundColor: hasActividad ? colors.parent1 + '20' : 'white' }}>
+        <select value={parsed.tipo || ''} onChange={e => updateActividad('tipo', e.target.value)} className={selectStyle}>
+          {tiposActividadPadre.map(t => <option key={t || 'empty'} value={t}>{t || '-'}</option>)}
+        </select>
+        <select value={parsed.entrada || ''} onChange={e => updateActividad('entrada', e.target.value)} className={selectStyle}>
+          {horasEntradaPadre.map(h => <option key={h || 'e'} value={h}>{h || '-'}</option>)}
+        </select>
+        <select value={parsed.salida || ''} onChange={e => updateActividad('salida', e.target.value)} className={selectStyle}>
+          {horasSalidaPadre.map(h => <option key={h || 's'} value={h}>{h || '-'}</option>)}
+        </select>
+      </div>
+    );
   };
 
   // Componente selector de turno madre (6 desplegables en 2 filas)
@@ -433,6 +500,7 @@ const CoParentingApp = () => {
                   <option value="">Sin turno</option>
                   {turnosPadre.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
+                <ActividadPadreSelector fecha={turnoKey} />
               </div>
               <div className="flex-1">
                 <div className="text-[10px] font-medium mb-0.5" style={{ color: colors.parent2 }}>{parents.parent2 || 'Madre'}</div>
@@ -1082,8 +1150,37 @@ const CoParentingApp = () => {
 
   // VISTA ESTADÍSTICAS
   const StatsView = () => {
-    // Calcular estadísticas desde el schedule
-    const calcularEstadisticas = () => {
+    const [mesSeleccionadoResumen, setMesSeleccionadoResumen] = useState('global');
+    const [mesSeleccionadoPadre, setMesSeleccionadoPadre] = useState('global');
+    const [mesSeleccionadoMadre, setMesSeleccionadoMadre] = useState('global');
+    const [mesSeleccionadoOtro, setMesSeleccionadoOtro] = useState('global');
+
+    // Obtener lista de meses disponibles desde el schedule
+    const getMesesDisponibles = () => {
+      const meses = new Set();
+      Object.keys(schedule).forEach(key => {
+        const fecha = key.split('_')[0];
+        if (fecha && fecha.length >= 7) {
+          const mesAno = fecha.substring(0, 7); // "2025-01"
+          meses.add(mesAno);
+        }
+      });
+      const mesesArray = Array.from(meses).sort();
+      return mesesArray;
+    };
+
+    const mesesDisponibles = getMesesDisponibles();
+
+    // Formatear mes para mostrar (2025-01 -> Enero 2025)
+    const formatearMes = (mesAno) => {
+      if (mesAno === 'global') return 'Global';
+      const [ano, mes] = mesAno.split('-');
+      const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+      return `${meses[parseInt(mes) - 1]} ${ano}`;
+    };
+
+    // Calcular estadísticas desde el schedule, filtrando por mes si se especifica
+    const calcularEstadisticas = (mesAno) => {
       const stats = {
         parent1: { child1: { total: 0, LV: 0, SD: 0 }, child2: { total: 0, LV: 0, SD: 0 }, ambas: { total: 0, LV: 0, SD: 0 } },
         parent2: { child1: { total: 0, LV: 0, SD: 0 }, child2: { total: 0, LV: 0, SD: 0 }, ambas: { total: 0, LV: 0, SD: 0 } },
@@ -1099,6 +1196,12 @@ const CoParentingApp = () => {
         
         const fecha = parts[0];
         const childKey = parts[1];
+
+        // Filtrar por mes si no es global
+        if (mesAno !== 'global') {
+          const mesAnoFecha = fecha.substring(0, 7);
+          if (mesAnoFecha !== mesAno) return;
+        }
         
         // Obtener día de la semana (0=domingo, 6=sábado)
         const date = new Date(fecha);
@@ -1122,18 +1225,29 @@ const CoParentingApp = () => {
       return stats;
     };
 
-    const stats = calcularEstadisticas();
+    // Selector de mes
+    const SelectorMes = ({ valor, onChange }) => (
+      <select value={valor} onChange={e => onChange(e.target.value)}
+        className="text-[10px] p-0.5 border rounded bg-white ml-2">
+        <option value="global">Global</option>
+        {mesesDisponibles.map(mes => (
+          <option key={mes} value={mes}>{formatearMes(mes)}</option>
+        ))}
+      </select>
+    );
     
     // Componente de tabla para cada cuidador
-    const TablaCuidador = ({ parentKey, nombre, color }) => {
+    const TablaCuidador = ({ parentKey, nombre, color, mesSeleccionado, setMesSeleccionado }) => {
+      const stats = calcularEstadisticas(mesSeleccionado);
       const data = stats[parentKey];
       const child1Name = children.child1 || 'Hija 1';
       const child2Name = children.child2 || 'Hija 2';
       
       return (
         <div className="mb-4">
-          <div className="font-bold text-sm mb-2 p-2 rounded" style={{ backgroundColor: color + '40', color: color === '#86efac' ? '#065f46' : color }}>
-            {nombre}
+          <div className="font-bold text-sm mb-2 p-2 rounded flex items-center justify-between" style={{ backgroundColor: color + '40', color: color === '#86efac' ? '#065f46' : color }}>
+            <span>{nombre}</span>
+            <SelectorMes valor={mesSeleccionado} onChange={setMesSeleccionado} />
           </div>
           <table className="w-full text-xs border-collapse">
             <thead>
@@ -1171,6 +1285,7 @@ const CoParentingApp = () => {
 
     // Resumen comparativo
     const ResumenComparativo = () => {
+      const stats = calcularEstadisticas(mesSeleccionadoResumen);
       const totalParent1 = stats.parent1.ambas.total;
       const totalParent2 = stats.parent2.ambas.total;
       const totalOther = stats.other.ambas.total;
@@ -1182,7 +1297,10 @@ const CoParentingApp = () => {
 
       return (
         <div className="mb-4 p-2 bg-gray-50 rounded">
-          <div className="font-bold text-sm mb-2">📊 Resumen Global</div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-bold text-sm">📊 Resumen</span>
+            <SelectorMes valor={mesSeleccionadoResumen} onChange={setMesSeleccionadoResumen} />
+          </div>
           <div className="space-y-2">
             {/* Barra de progreso padre */}
             <div>
@@ -1233,20 +1351,26 @@ const CoParentingApp = () => {
         <TablaCuidador 
           parentKey="parent1" 
           nombre={parents.parent1 || 'Padre'} 
-          color={colors.parent1} 
+          color={colors.parent1}
+          mesSeleccionado={mesSeleccionadoPadre}
+          setMesSeleccionado={setMesSeleccionadoPadre}
         />
         
         <TablaCuidador 
           parentKey="parent2" 
           nombre={parents.parent2 || 'Madre'} 
-          color={colors.parent2} 
+          color={colors.parent2}
+          mesSeleccionado={mesSeleccionadoMadre}
+          setMesSeleccionado={setMesSeleccionadoMadre}
         />
         
         {parents.other && (
           <TablaCuidador 
             parentKey="other" 
             nombre={parents.other} 
-            color={colors.other} 
+            color={colors.other}
+            mesSeleccionado={mesSeleccionadoOtro}
+            setMesSeleccionado={setMesSeleccionadoOtro}
           />
         )}
 
