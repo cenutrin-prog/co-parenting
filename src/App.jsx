@@ -19,6 +19,8 @@ const CoParentingApp = () => {
   const [currentView, setCurrentView] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [popupObs, setPopupObs] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaveStatus, setLastSaveStatus] = useState(null); // 'success', 'error', o null
   const periods = ['Mañana', 'Tarde', 'Noche'];
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const monthsShort = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -146,8 +148,147 @@ const CoParentingApp = () => {
   const addMonths = (d, months) => { const nd = new Date(d); nd.setMonth(nd.getMonth() + months); return nd; };
 
   const handleNoteChange = useCallback((key, value) => { setNotes(prev => ({ ...prev, [key]: value })); }, []);
-  const handleScheduleChange = useCallback((key, value) => { setSchedule(prev => ({ ...prev, [key]: value })); }, []);
-  const handleTurnoChange = useCallback((fecha, quien, value) => { setTurnos(prev => ({ ...prev, [`${fecha}_${quien}`]: value })); }, []);
+  
+  // Guardar UNA asignación individual en Supabase
+  const saveOneAsignacion = async (scheduleKey, parentKey) => {
+    try {
+      // scheduleKey formato: "2024-12-09_child1_Mañana"
+      const parts = scheduleKey.split('_');
+      if (parts.length < 3) return;
+      
+      const fecha = parts[0];
+      const childKey = parts[1];
+      const periodo = parts.slice(2).join('_');
+      
+      // Obtener IDs de padre e hija
+      const { data: padresData } = await supabase.from('padres').select('id, nombre');
+      const { data: hijasData } = await supabase.from('hijas').select('id, nombre');
+      
+      const padresMap = {};
+      const hijasMap = {};
+      padresData?.forEach(p => { padresMap[p.nombre] = p.id; });
+      hijasData?.forEach(h => { hijasMap[h.nombre] = h.id; });
+      
+      const padreNombre = parents[parentKey];
+      const hijaNombre = children[childKey];
+      
+      if (!padreNombre || !hijaNombre) {
+        console.log('saveOneAsignacion: Falta padre o hija', { parentKey, childKey });
+        return;
+      }
+      
+      const padreId = padresMap[padreNombre];
+      const hijaId = hijasMap[hijaNombre];
+      
+      if (!padreId || !hijaId) {
+        console.log('saveOneAsignacion: No se encontró ID', { padreNombre, hijaNombre });
+        return;
+      }
+      
+      // Borrar la asignación existente para esta fecha/hija/periodo
+      await supabase
+        .from('asignaciones')
+        .delete()
+        .eq('fecha', fecha)
+        .eq('hija_id', hijaId)
+        .eq('periodo', periodo);
+      
+      // Si hay un padre asignado (no está vacío), insertar la nueva asignación
+      if (parentKey) {
+        const { error } = await supabase
+          .from('asignaciones')
+          .insert({ padre_id: padreId, hija_id: hijaId, fecha, periodo, observaciones: null });
+        
+        if (error) {
+          console.error('Error guardando asignación:', error);
+          setLastSaveStatus('error');
+          return;
+        }
+      }
+      
+      console.log('Asignación guardada:', { fecha, childKey, periodo, parentKey });
+      setLastSaveStatus('success');
+      setTimeout(() => setLastSaveStatus(null), 2000);
+      
+    } catch (err) {
+      console.error('Error en saveOneAsignacion:', err);
+      setLastSaveStatus('error');
+    }
+  };
+  
+  // Guardar UN turno individual en Supabase
+  const saveOneTurno = async (fecha, quien, valor) => {
+    try {
+      // Primero obtenemos el turno actual de esa fecha
+      const { data: turnoExistente } = await supabase
+        .from('turnos')
+        .select('*')
+        .eq('fecha', fecha)
+        .single();
+      
+      let turnoData = {
+        fecha,
+        turno_padre: null,
+        turno_madre: null
+      };
+      
+      // Si existe, preservamos los valores actuales
+      if (turnoExistente) {
+        turnoData.turno_padre = turnoExistente.turno_padre;
+        turnoData.turno_madre = turnoExistente.turno_madre;
+      }
+      
+      // Actualizamos según quién sea
+      if (quien === 'padre') {
+        // Preservar actividad si existe
+        const actividadActual = turnoData.turno_padre?.split('||')[1] || '';
+        turnoData.turno_padre = valor + (actividadActual ? `||${actividadActual}` : '');
+      } else if (quien === 'padre_actividad') {
+        // Preservar turno si existe
+        const turnoActual = turnoData.turno_padre?.split('||')[0] || '';
+        turnoData.turno_padre = turnoActual + (valor ? `||${valor}` : '');
+      } else if (quien === 'madre') {
+        turnoData.turno_madre = valor || null;
+      }
+      
+      // Borrar y volver a insertar (upsert simple)
+      await supabase.from('turnos').delete().eq('fecha', fecha);
+      
+      // Solo insertar si hay algún dato
+      if (turnoData.turno_padre || turnoData.turno_madre) {
+        const { error } = await supabase.from('turnos').insert(turnoData);
+        if (error) {
+          console.error('Error guardando turno:', error);
+          setLastSaveStatus('error');
+          return;
+        }
+      }
+      
+      console.log('Turno guardado:', { fecha, quien, valor });
+      setLastSaveStatus('success');
+      setTimeout(() => setLastSaveStatus(null), 2000);
+      
+    } catch (err) {
+      console.error('Error en saveOneTurno:', err);
+      setLastSaveStatus('error');
+    }
+  };
+  
+  const handleScheduleChange = useCallback((key, value) => { 
+    setSchedule(prev => ({ ...prev, [key]: value }));
+    // Guardar automáticamente en Supabase
+    if (currentUser === 'parent1') {
+      saveOneAsignacion(key, value);
+    }
+  }, [currentUser, parents, children]);
+  
+  const handleTurnoChange = useCallback((fecha, quien, value) => { 
+    setTurnos(prev => ({ ...prev, [`${fecha}_${quien}`]: value }));
+    // Guardar automáticamente en Supabase
+    if (currentUser === 'parent1') {
+      saveOneTurno(fecha, quien, value);
+    }
+  }, [currentUser]);
 
   // Parsear turno del padre para mostrar en dos líneas
   const parseTurnoPadre = (turno) => {
@@ -299,10 +440,13 @@ const CoParentingApp = () => {
   }, [step, parents.parent1, children.child1, loadScheduleFromSupabase]);
 
   const saveScheduleInSupabase = async () => {
+    // Esta función ahora es solo un respaldo para forzar sincronización completa
+    // Normalmente cada cambio se guarda automáticamente
+    setIsSaving(true);
     try {
       // Guardar asignaciones
       const keys = Object.keys(schedule).filter(k => schedule[k]);
-      console.log('Asignaciones a guardar:', keys.length);
+      console.log('Sincronización completa - Asignaciones:', keys.length);
       
       const { data: padresData } = await supabase.from('padres').select('id, nombre');
       const { data: hijasData } = await supabase.from('hijas').select('id, nombre');
@@ -321,41 +465,31 @@ const CoParentingApp = () => {
         const padreNombre = parents[parentKey]; 
         const hijaNombre = children[childKey];
         
-        if (!padreNombre || !hijaNombre) {
-          console.log('Falta padre o hija:', { parentKey, childKey, padreNombre, hijaNombre });
-          continue;
-        }
+        if (!padreNombre || !hijaNombre) continue;
         
         const padreId = padresMap[padreNombre]; 
         const hijaId = hijasMap[hijaNombre];
         
-        if (!padreId || !hijaId) {
-          console.log('No se encontró ID:', { padreNombre, hijaNombre, padreId, hijaId });
-          continue;
-        }
+        if (!padreId || !hijaId) continue;
         
         upserts.push({ padre_id: padreId, hija_id: hijaId, fecha, periodo, observaciones: notes[k] || null });
       }
       
-      console.log('Upserts preparados:', upserts.length);
-      
       if (upserts.length > 0) {
         // Agrupar por fecha para borrar y luego insertar
         const fechasUnicas = [...new Set(upserts.map(u => u.fecha))];
-        console.log('Fechas a actualizar:', fechasUnicas);
         
         for (const fecha of fechasUnicas) {
-          const { error: deleteError } = await supabase.from('asignaciones').delete().eq('fecha', fecha);
-          if (deleteError) console.error('Error borrando fecha', fecha, deleteError);
+          await supabase.from('asignaciones').delete().eq('fecha', fecha);
         }
         
-        const { data: insertData, error: insertError } = await supabase.from('asignaciones').insert(upserts);
+        const { error: insertError } = await supabase.from('asignaciones').insert(upserts);
         if (insertError) {
           console.error('Error insertando asignaciones:', insertError);
-          alert('Error al guardar asignaciones: ' + insertError.message);
+          setIsSaving(false);
+          setLastSaveStatus('error');
           return;
         }
-        console.log('Asignaciones insertadas correctamente');
       }
       
       // Guardar turnos
@@ -364,14 +498,13 @@ const CoParentingApp = () => {
       turnoKeys.forEach(k => {
         const parts = k.split('_'); 
         const fecha = parts[0]; 
-        const quien = parts.slice(1).join('_'); // Puede ser "padre", "madre", o "padre_actividad"
+        const quien = parts.slice(1).join('_');
         if (!turnosPorFecha[fecha]) turnosPorFecha[fecha] = { turno_padre: null, turno_madre: null, actividad_padre: null };
         if (quien === 'padre') turnosPorFecha[fecha].turno_padre = turnos[k];
         if (quien === 'madre') turnosPorFecha[fecha].turno_madre = turnos[k];
         if (quien === 'padre_actividad') turnosPorFecha[fecha].actividad_padre = turnos[k];
       });
       
-      // Combinar turno_padre y actividad_padre separados por "||"
       const turnoUpserts = Object.entries(turnosPorFecha).map(([fecha, data]) => {
         let turnoPadreCompleto = data.turno_padre || '';
         if (data.actividad_padre) {
@@ -386,21 +519,25 @@ const CoParentingApp = () => {
       
       if (turnoUpserts.length > 0) {
         for (const t of turnoUpserts) {
-          const { error: deleteError } = await supabase.from('turnos').delete().eq('fecha', t.fecha);
-          if (deleteError) console.error('Error borrando turno', t.fecha, deleteError);
+          await supabase.from('turnos').delete().eq('fecha', t.fecha);
         }
         const { error: insertError } = await supabase.from('turnos').insert(turnoUpserts);
         if (insertError) {
           console.error('Error insertando turnos:', insertError);
-          alert('Error al guardar turnos: ' + insertError.message);
+          setIsSaving(false);
+          setLastSaveStatus('error');
           return;
         }
       }
       
-      alert('Guardado correctamente. Asignaciones: ' + upserts.length + ', Turnos: ' + turnoUpserts.length);
+      setIsSaving(false);
+      setLastSaveStatus('success');
+      setTimeout(() => setLastSaveStatus(null), 3000);
+      
     } catch (err) { 
-      console.error('Error inesperado:', err); 
-      alert('Error al guardar: ' + (err.message || err)); 
+      console.error('Error inesperado:', err);
+      setIsSaving(false);
+      setLastSaveStatus('error');
     }
   };
 
@@ -501,7 +638,19 @@ const CoParentingApp = () => {
           <button onClick={() => setCurrentDate(d => addDays(d, -1))} className="px-2 py-1 border rounded text-sm font-bold">◀</button>
           <div className="flex flex-col items-center">
             {isParent1User && (
-              <button onClick={saveScheduleInSupabase} className="px-3 py-1 text-xs rounded bg-green-600 text-white font-bold mb-1">Guardar</button>
+              <div className="flex items-center gap-1 mb-1">
+                <button onClick={saveScheduleInSupabase} 
+                  disabled={isSaving}
+                  className={`px-3 py-1 text-xs rounded font-bold ${isSaving ? 'bg-gray-400' : 'bg-blue-600'} text-white`}>
+                  {isSaving ? 'Sincronizando...' : 'Sincronizar'}
+                </button>
+                {lastSaveStatus === 'success' && (
+                  <span className="text-green-600 text-xs">✓</span>
+                )}
+                {lastSaveStatus === 'error' && (
+                  <span className="text-red-600 text-xs">✗</span>
+                )}
+              </div>
             )}
             <div className={`font-bold text-sm text-center px-2 py-0.5 rounded ${todayStyle ? 'bg-black text-white' : ''}`}
               style={{ color: todayStyle ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
