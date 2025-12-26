@@ -26,12 +26,17 @@ const CoParentingApp = () => {
   const monthsShort = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
   const turnosPadre = [
-    'E5DN (09:00-09:00)', 'E5D (09:00-21:00)', 'E5N (21:00-09:00)', 'E4DN (09:00-09:00)',
-    'GL (08:00-08:00)', 'E4D (09:00-21:00)', 'E4N (21:00-09:00)', 'C2 (09:00-21:00)',
-    'C4T (10:00-22:00)', 'C3D (08:15-20:15)', 'C3N (20:15-08:15)',
-    'E1D (08:00-20:00)', 'E1N (20:00-08:00)', 'E1DN (08:00-08:00)',
-    'E2D (09:00-21:00)', 'E7DN (11:00-23:00)', 'E7DN (12:00-00:00)',
-    'E3DN (09:00-09:00)', 'E3D (09:00-21:00)', 'E3N (21:00-09:00)'
+    'E5DN (09:00-09:00)', 'E5D (09:00-21:00)', 'E5N (21:00-09:00)', 
+    'E4DN (09:00-09:00)', 'E4D (09:00-21:00)', 'E4N (21:00-09:00)', 
+    'E3DN (09:00-09:00)', 'E3D (09:00-21:00)', 'E3N (21:00-09:00)',
+    'E1DN (08:00-08:00)', 'E1D (08:00-20:00)', 'E1N (20:00-08:00)', 
+    'E2D (09:00-21:00)', 
+    'E6DN (07:30-07:30)', 'E6D (07:30-19:30)', 'E6N (19:30-07:30)',
+    'E7DN (11:00-23:00)', 'E7DN verano (12:00-00:00)',
+    'GL (08:00-08:00)', 
+    'CDJ (08:00-20:00)', 'CNJ (20:00-08:00)',
+    'C2 (09:00-21:00)', 'C4T (10:00-22:00)', 
+    'C3D (08:15-20:15)', 'C3N (20:15-08:15)'
   ];
 
   // Tipos de actividad para el padre (segunda fila de desplegables)
@@ -1408,6 +1413,96 @@ const CoParentingApp = () => {
         ))}
       </select>
     );
+
+    // Calcular horas de un turno dado el código
+    const calcularHorasTurnoPadre = (turnoStr) => {
+      if (!turnoStr) return 0;
+      
+      // Extraer solo el código del turno (sin horario entre paréntesis)
+      const codigo = turnoStr.split(' ')[0].split('(')[0].toUpperCase();
+      
+      // Mapa de horas por código de turno
+      const horasPorTurno = {
+        // E5, E4, E3 tienen los mismos horarios
+        'E5D': 12, 'E5N': 12, 'E5DN': 24,
+        'E4D': 12, 'E4N': 12, 'E4DN': 24,
+        'E3D': 12, 'E3N': 12, 'E3DN': 24,
+        // E1
+        'E1D': 12, 'E1N': 12, 'E1DN': 24,
+        // E2
+        'E2D': 12,
+        // E7
+        'E7DN': 12, // 11:00 a 23:00 o 12:00 a 00:00
+        // E6
+        'E6D': 12, 'E6N': 12, 'E6DN': 24,
+        // C turnos
+        'CDJ': 12, 'CNJ': 12,
+        'C2': 12,
+        'C4T': 12,
+        'C3D': 12, 'C3N': 12,
+        // GL (guardia localizada, 24h)
+        'GL': 24
+      };
+      
+      return horasPorTurno[codigo] || 0;
+    };
+
+    // Calcular horas de turno de la madre desde el string guardado
+    const calcularHorasTurnoMadre = (turnoStr) => {
+      if (!turnoStr) return 0;
+      
+      let totalHoras = 0;
+      const turnos = turnoStr.split(';').filter(t => t);
+      
+      turnos.forEach(t => {
+        const [tipo, entrada, salida] = t.split('|');
+        if (entrada && salida) {
+          const [hEntrada, mEntrada] = entrada.split(':').map(Number);
+          const [hSalida, mSalida] = salida.split(':').map(Number);
+          
+          let minEntrada = hEntrada * 60 + mEntrada;
+          let minSalida = hSalida * 60 + mSalida;
+          
+          // Si la salida es menor que la entrada, es turno de noche (cruza medianoche)
+          if (minSalida <= minEntrada) {
+            minSalida += 24 * 60;
+          }
+          
+          totalHoras += (minSalida - minEntrada) / 60;
+        }
+      });
+      
+      return totalHoras;
+    };
+
+    // Calcular total de horas trabajadas por cada progenitor en un mes
+    const calcularHorasTrabajadas = (mesAno) => {
+      let horasPadre = 0;
+      let horasMadre = 0;
+      
+      Object.entries(turnos).forEach(([key, valor]) => {
+        if (!valor) return;
+        
+        const parts = key.split('_');
+        const fecha = parts[0];
+        const quien = parts.slice(1).join('_');
+        
+        // Filtrar por mes si no es global
+        if (mesAno !== 'global') {
+          const mesAnoFecha = fecha.substring(0, 7);
+          if (mesAnoFecha !== mesAno) return;
+        }
+        
+        if (quien === 'padre') {
+          horasPadre += calcularHorasTurnoPadre(valor);
+        } else if (quien === 'madre') {
+          horasMadre += calcularHorasTurnoMadre(valor);
+        }
+        // Nota: 'padre_actividad' no cuenta como horas de trabajo
+      });
+      
+      return { horasPadre, horasMadre };
+    };
     
     // Componente de tabla para cada cuidador
     const TablaCuidador = ({ parentKey, nombre, color, mesSeleccionado, setMesSeleccionado }) => {
@@ -1468,6 +1563,9 @@ const CoParentingApp = () => {
       const pctParent2 = granTotal > 0 ? ((totalParent2 / granTotal) * 100).toFixed(1) : 0;
       const pctOther = granTotal > 0 ? ((totalOther / granTotal) * 100).toFixed(1) : 0;
 
+      // Calcular horas trabajadas
+      const { horasPadre, horasMadre } = calcularHorasTrabajadas(mesSeleccionadoResumen);
+
       return (
         <div className="mb-4 p-2 bg-gray-50 rounded">
           <div className="flex items-center justify-between mb-2">
@@ -1478,7 +1576,9 @@ const CoParentingApp = () => {
             {/* Barra de progreso padre */}
             <div>
               <div className="flex justify-between text-xs mb-1">
-                <span style={{ color: colors.parent1 }}>{parents.parent1}</span>
+                <span style={{ color: colors.parent1 }}>
+                  {parents.parent1} <span className="font-bold">({horasPadre}h)</span>
+                </span>
                 <span className="font-bold">{totalParent1} franjas ({pctParent1}%)</span>
               </div>
               <div className="w-full bg-gray-200 rounded h-3">
@@ -1488,7 +1588,9 @@ const CoParentingApp = () => {
             {/* Barra de progreso madre */}
             <div>
               <div className="flex justify-between text-xs mb-1">
-                <span style={{ color: '#065f46' }}>{parents.parent2}</span>
+                <span style={{ color: '#065f46' }}>
+                  {parents.parent2} <span className="font-bold">({horasMadre}h)</span>
+                </span>
                 <span className="font-bold">{totalParent2} franjas ({pctParent2}%)</span>
               </div>
               <div className="w-full bg-gray-200 rounded h-3">
