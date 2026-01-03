@@ -2087,7 +2087,6 @@ const CoParentingApp = () => {
   const GlobalMonthCalendar = () => {
     const monthDates = getMonthDates(currentDate);
     const monthLabel = currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
-    const numRows = Math.ceil(monthDates.length / 7);
     
     // Obtener iniciales
     const getIniciales = (nombre, isParent1Flag) => {
@@ -2102,96 +2101,88 @@ const CoParentingApp = () => {
     const inicialesP1 = getIniciales(parents.parent1, true);
     const inicialesP2 = getIniciales(parents.parent2, false);
     const inicialesOther = parents.other ? parents.other.substring(0, 2) : '';
-    const inicialesChild1 = (children.child1 || 'H1').substring(0, 2);
-    const inicialesChild2 = (children.child2 || 'H2').substring(0, 2);
+    // Solo primera letra para las hijas
+    const inicialChild1 = (children.child1 || 'H')[0].toUpperCase();
+    const inicialChild2 = (children.child2 || 'H')[0].toUpperCase();
+
+    // Colores para el calendario global
+    const getColorForAssigned = (assigned) => {
+      if (assigned === 'parent1') return '#FBBF24'; // Amarillo para padre
+      if (assigned === 'parent2') return '#bbf7d0'; // Verde claro para madre
+      if (assigned === 'other') return '#f9a8d4'; // Rosa claro
+      return '#e5e7eb';
+    };
 
     return (
-      <div className="p-0.5 h-full flex flex-col">
-        <div className="flex items-center justify-between mb-0.5">
-          <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-0.5"><ChevronLeft size={14} /></button>
-          <div className="text-xs font-medium">
+      <div className="p-2">
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={18} /></button>
+          <div className="text-sm font-medium">
             <span className="font-bold">GLOBAL</span> - {capitalize(monthLabel)}
           </div>
-          <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-0.5"><ChevronRight size={14} /></button>
+          <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={18} /></button>
         </div>
-        <div className="flex-1 overflow-hidden">
-          <div className="grid h-full" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: `12px repeat(${numRows}, 1fr)`, gap: 1 }}>
+        
+        {/* Leyenda arriba */}
+        <div className="flex justify-center gap-3 mb-2 text-[9px]">
+          <span className="flex items-center gap-1">
+            <span style={{ backgroundColor: '#FBBF24', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
+            {parents.parent1 || 'Padre'}
+          </span>
+          <span className="flex items-center gap-1">
+            <span style={{ backgroundColor: '#bbf7d0', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
+            {parents.parent2 || 'Madre'}
+          </span>
+          {parents.other && (
+            <span className="flex items-center gap-1">
+              <span style={{ backgroundColor: '#f9a8d4', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
+              {parents.other}
+            </span>
+          )}
+        </div>
+        
+        <div>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
             {daysOfWeek.map((d, i) => (
-              <div key={d} className="text-[7px] font-bold text-center" 
+              <div key={d} className="text-[9px] font-bold text-center py-1" 
                 style={{ color: (i === 5 || i === 6) ? '#dc2626' : 'inherit' }}>{d}</div>
             ))}
             {monthDates.map((date, idx) => {
               const dateKey = date ? formatDate(date) : `empty-${idx}`;
-              if (!date) return <div key={dateKey} className="border rounded bg-gray-50" />;
+              if (!date) return <div key={dateKey} className="border rounded bg-gray-50 min-h-[52px]" />;
+              
               const today = isToday(date);
               const redDay = isRedDay(date);
 
               return (
-                <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden" style={{ minHeight: 0 }}>
+                <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden min-h-[52px]">
                   {/* Número del día */}
-                  <div className="flex justify-center">
-                    <span className={`font-bold text-[7px] ${today ? 'bg-black text-white rounded-full w-3 h-3 flex items-center justify-center' : ''}`}
-                      style={{ color: today ? 'white' : (redDay ? '#dc2626' : 'inherit'), fontSize: '7px' }}>
+                  <div className="flex justify-center mb-1">
+                    <span className={`font-bold text-[9px] ${today ? 'bg-black text-white rounded-full w-4 h-4 flex items-center justify-center' : ''}`}
+                      style={{ color: today ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
                       {date.getDate()}
                     </span>
                   </div>
+                  
                   {/* Franjas: Mañana, Tarde, Noche */}
-                  <div className="flex-1 flex flex-col gap-0" style={{ marginTop: '1px' }}>
-                    {periods.map((period, pIdx) => {
+                  <div className="flex-1 flex flex-col gap-0.5">
+                    {periods.map((period) => {
                       const c1k = getScheduleKey(date, 'child1', period);
                       const c2k = getScheduleKey(date, 'child2', period);
                       const c1Assigned = schedule[c1k];
                       const c2Assigned = schedule[c2k];
-                      
-                      // Determinar quién tiene a cada hija
-                      const getInitialForAssigned = (assigned) => {
-                        if (assigned === 'parent1') return inicialesP1;
-                        if (assigned === 'parent2') return inicialesP2;
-                        if (assigned === 'other') return inicialesOther;
-                        return '-';
-                      };
-                      
-                      const getColorForAssigned = (assigned) => {
-                        // Colores para el calendario global: Padre amarillo, Madre sin fondo
-                        if (assigned === 'parent1') return '#FBBF24'; // Amarillo intenso para padre
-                        if (assigned === 'parent2') return 'transparent'; // Sin fondo para madre
-                        if (assigned === 'other') return '#ec4899'; // Rosa intenso
-                        return '#e5e7eb';
-                      };
-                      
-                      const getTextColorForAssigned = (assigned) => {
-                        if (assigned === 'parent1') return '#000000'; // Negro sobre amarillo
-                        if (assigned === 'parent2') return '#065f46'; // Verde oscuro para madre (sin fondo)
-                        if (assigned === 'other') return '#ffffff';
-                        return '#666666';
-                      };
-                      
-                      const getBorderForAssigned = (assigned) => {
-                        if (assigned === 'parent2') return '1px solid #065f46'; // Borde verde para madre
-                        return 'none';
-                      };
 
                       return (
-                        <div key={`${dateKey}_${period}_global`} className="flex gap-0.5" style={{ flex: 1, minHeight: 0 }}>
-                          {/* Columna Denia (child1) */}
-                          <div className="flex-1 flex flex-col items-center justify-center rounded" 
-                            style={{ 
-                              backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6', 
-                              border: c1Assigned ? getBorderForAssigned(c1Assigned) : 'none',
-                              padding: '0' 
-                            }}>
-                            <div className="text-[5px] font-bold" style={{ color: c1Assigned ? getTextColorForAssigned(c1Assigned) : colors.child1, lineHeight: 1 }}>{inicialesChild1}</div>
-                            <div className="text-[6px] font-bold" style={{ color: c1Assigned ? getTextColorForAssigned(c1Assigned) : '#666', lineHeight: 1 }}>{getInitialForAssigned(c1Assigned)}</div>
+                        <div key={`${dateKey}_${period}_global`} className="flex gap-0.5 flex-1">
+                          {/* Columna hija 1 */}
+                          <div className="flex-1 flex items-center justify-center rounded text-[7px] font-bold"
+                            style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6' }}>
+                            {c1Assigned ? inicialChild1 : '-'}
                           </div>
-                          {/* Columna Elsa (child2) */}
-                          <div className="flex-1 flex flex-col items-center justify-center rounded" 
-                            style={{ 
-                              backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) : '#f3f4f6', 
-                              border: c2Assigned ? getBorderForAssigned(c2Assigned) : 'none',
-                              padding: '0' 
-                            }}>
-                            <div className="text-[5px] font-bold" style={{ color: c2Assigned ? getTextColorForAssigned(c2Assigned) : colors.child2, lineHeight: 1 }}>{inicialesChild2}</div>
-                            <div className="text-[6px] font-bold" style={{ color: c2Assigned ? getTextColorForAssigned(c2Assigned) : '#666', lineHeight: 1 }}>{getInitialForAssigned(c2Assigned)}</div>
+                          {/* Columna hija 2 */}
+                          <div className="flex-1 flex items-center justify-center rounded text-[7px] font-bold"
+                            style={{ backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) : '#f3f4f6' }}>
+                            {c2Assigned ? inicialChild2 : '-'}
                           </div>
                         </div>
                       );
@@ -2202,11 +2193,128 @@ const CoParentingApp = () => {
             })}
           </div>
         </div>
+      </div>
+    );
+  };
+
+  // Calendario anual (solo colores, sin letras)
+  const YearCalendar = () => {
+    const currentYear = currentDate.getFullYear();
+    const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const dayLetters = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+    
+    // Colores para el calendario anual
+    const getColorForAssigned = (assigned) => {
+      if (assigned === 'parent1') return '#FBBF24'; // Amarillo para padre
+      if (assigned === 'parent2') return '#86efac'; // Verde para madre
+      if (assigned === 'other') return '#f9a8d4'; // Rosa
+      return '#e5e7eb'; // Gris
+    };
+
+    // Obtener días del mes para el año
+    const getMonthDatesForYear = (month) => {
+      const year = currentYear;
+      const lastDay = new Date(year, month + 1, 0);
+      const dates = [];
+      const firstWeekDay = new Date(year, month, 1).getDay();
+      const adj = firstWeekDay === 0 ? 6 : firstWeekDay - 1;
+      for (let i = 0; i < adj; i++) dates.push(null);
+      for (let i = 1; i <= lastDay.getDate(); i++) dates.push(new Date(year, month, i));
+      return dates;
+    };
+
+    return (
+      <div className="p-1 h-full flex flex-col overflow-hidden">
+        {/* Cabecera con año y navegación */}
+        <div className="flex items-center justify-between mb-1">
+          <button onClick={() => setCurrentDate(d => { const nd = new Date(d); nd.setFullYear(nd.getFullYear() - 1); return nd; })} 
+            className="p-1"><ChevronLeft size={16} /></button>
+          <div className="text-sm font-bold">{currentYear}</div>
+          <button onClick={() => setCurrentDate(d => { const nd = new Date(d); nd.setFullYear(nd.getFullYear() + 1); return nd; })} 
+            className="p-1"><ChevronRight size={16} /></button>
+        </div>
+        
         {/* Leyenda */}
-        <div className="flex justify-center gap-2 mt-1 text-[6px]">
-          <span><span style={{ backgroundColor: '#FBBF24', padding: '0 3px', borderRadius: '2px' }}>●</span> {parents.parent1 || 'Padre'} ({inicialesP1})</span>
-          <span style={{ color: '#065f46' }}>○ {parents.parent2 || 'Madre'} ({inicialesP2})</span>
-          {parents.other && <span style={{ color: '#ec4899' }}>● {parents.other} ({inicialesOther})</span>}
+        <div className="flex justify-center gap-2 mb-1 text-[8px]">
+          <span className="flex items-center gap-1">
+            <span style={{ backgroundColor: '#FBBF24', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
+            {parents.parent1 || 'Padre'}
+          </span>
+          <span className="flex items-center gap-1">
+            <span style={{ backgroundColor: '#86efac', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
+            {parents.parent2 || 'Madre'}
+          </span>
+          {parents.other && (
+            <span className="flex items-center gap-1">
+              <span style={{ backgroundColor: '#f9a8d4', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
+              {parents.other}
+            </span>
+          )}
+        </div>
+        
+        {/* Grid de 12 meses (4 filas x 3 columnas) */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="grid grid-cols-3 gap-1">
+            {monthNames.map((monthName, monthIdx) => {
+              const monthDates = getMonthDatesForYear(monthIdx);
+              const numWeeks = Math.ceil(monthDates.length / 7);
+              
+              return (
+                <div key={monthIdx} className="border rounded p-0.5">
+                  {/* Nombre del mes */}
+                  <div className="text-[7px] font-bold text-center mb-0.5">{monthName}</div>
+                  
+                  {/* Días de la semana */}
+                  <div className="grid grid-cols-7 gap-px mb-0.5">
+                    {dayLetters.map((d, i) => (
+                      <div key={d} className="text-[5px] text-center font-bold"
+                        style={{ color: i >= 5 ? '#dc2626' : '#666' }}>{d}</div>
+                    ))}
+                  </div>
+                  
+                  {/* Días del mes */}
+                  <div className="grid grid-cols-7 gap-px">
+                    {monthDates.map((date, idx) => {
+                      if (!date) return <div key={`empty-${monthIdx}-${idx}`} className="h-2" />;
+                      
+                      // Obtener asignaciones de ambas hijas para este día
+                      // Usamos la mañana como referencia principal
+                      const c1k = getScheduleKey(date, 'child1', 'Mañana');
+                      const c2k = getScheduleKey(date, 'child2', 'Mañana');
+                      const c1Assigned = schedule[c1k];
+                      const c2Assigned = schedule[c2k];
+                      
+                      // Si ambas hijas están con el mismo, usamos ese color
+                      // Si están con diferentes, dividimos el cuadrado
+                      const sameParent = c1Assigned === c2Assigned;
+                      const today = isToday(date);
+                      
+                      return (
+                        <div key={`${monthIdx}-${date.getDate()}`} 
+                          className="h-2 rounded-sm flex overflow-hidden"
+                          style={{ 
+                            border: today ? '1px solid black' : 'none'
+                          }}>
+                          {sameParent ? (
+                            <div className="w-full h-full" 
+                              style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#e5e7eb' }} />
+                          ) : (
+                            <>
+                              <div className="w-1/2 h-full" 
+                                style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#e5e7eb' }} />
+                              <div className="w-1/2 h-full" 
+                                style={{ backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) : '#e5e7eb' }} />
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -2280,41 +2388,50 @@ const CoParentingApp = () => {
           style={{ borderColor: profileBorder, backgroundColor: 'white', color: topBarColor }}>{displayName}</button>
       </div>
       
-      {/* Botones de navegación - UNA SOLA FILA PARA PADRE (parent1) */}
+      {/* Botones de navegación - DOS FILAS PARA PADRE (parent1) */}
       {isParent1 ? (
-        <div className="flex gap-1 p-1.5 border-b">
-          <button onClick={() => setCurrentView('daily')} className={`px-2 py-1 text-xs rounded flex items-center gap-0.5 ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-            <Calendar size={11} /> Día
-          </button>
-          <button onClick={() => setCurrentView('weekAssign')} className={`px-2 py-1 text-xs rounded ${currentView === 'weekAssign' ? 'bg-green-600 text-white' : 'bg-gray-100'}`}
-            style={{ fontWeight: 'bold' }}>
-            +Sem
-          </button>
-          <button onClick={() => setCurrentView('week')} className={`px-2 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-            Sem
-          </button>
-          <button onClick={() => setCurrentView('month')} className={`px-2 py-1 text-xs rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-            Mes
-          </button>
-          <button onClick={() => setCurrentView('globalMonth')} className={`px-2 py-1 text-xs rounded ${currentView === 'globalMonth' ? 'bg-purple-600 text-white' : 'bg-gray-100'}`}
-            style={{ fontWeight: 'bold' }}>
-            Global
-          </button>
-          <button onClick={() => setCurrentView('motherMonth')} className={`px-2 py-1 text-xs rounded ${currentView === 'motherMonth' ? 'text-white' : 'bg-gray-100'}`}
-            style={{ backgroundColor: currentView === 'motherMonth' ? colors.parent2 : undefined, color: '#065f46', fontWeight: 'bold' }}>
-            {parents.parent2 || 'Madre'}
-          </button>
-          <button onClick={() => setCurrentView('child1month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child1month' ? 'text-white' : 'bg-gray-100'}`}
-            style={{ backgroundColor: currentView === 'child1month' ? colors.child1 : undefined, color: currentView === 'child1month' ? '#000' : undefined }}>
-            {children.child1 || 'Hijo 1'}
-          </button>
-          <button onClick={() => setCurrentView('child2month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
-            style={{ backgroundColor: currentView === 'child2month' ? colors.child2 : undefined, color: currentView === 'child2month' ? '#000' : undefined }}>
-            {children.child2 || 'Hijo 2'}
-          </button>
-          <button onClick={() => setCurrentView('stats')} className={`px-1.5 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-            <BarChart3 size={14} />
-          </button>
+        <div className="border-b">
+          {/* Primera fila: vistas de calendario */}
+          <div className="flex gap-1 p-1 pb-0.5">
+            <button onClick={() => setCurrentView('daily')} className={`px-2 py-1 text-xs rounded flex items-center gap-0.5 ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+              <Calendar size={11} /> Día
+            </button>
+            <button onClick={() => setCurrentView('weekAssign')} className={`px-2 py-1 text-xs rounded ${currentView === 'weekAssign' ? 'bg-green-600 text-white' : 'bg-gray-100'}`}
+              style={{ fontWeight: 'bold' }}>
+              +Sem
+            </button>
+            <button onClick={() => setCurrentView('week')} className={`px-2 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+              Sem
+            </button>
+            <button onClick={() => setCurrentView('month')} className={`px-2 py-1 text-xs rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+              Mes
+            </button>
+            <button onClick={() => setCurrentView('year')} className={`px-2 py-1 text-xs rounded ${currentView === 'year' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+              Año
+            </button>
+            <button onClick={() => setCurrentView('globalMonth')} className={`px-2 py-1 text-xs rounded ${currentView === 'globalMonth' ? 'bg-purple-600 text-white' : 'bg-gray-100'}`}
+              style={{ fontWeight: 'bold' }}>
+              Global
+            </button>
+            <button onClick={() => setCurrentView('stats')} className={`px-1.5 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+              <BarChart3 size={14} />
+            </button>
+          </div>
+          {/* Segunda fila: vistas por persona */}
+          <div className="flex gap-1 p-1 pt-0.5">
+            <button onClick={() => setCurrentView('motherMonth')} className={`px-2 py-1 text-xs rounded ${currentView === 'motherMonth' ? 'text-white' : 'bg-gray-100'}`}
+              style={{ backgroundColor: currentView === 'motherMonth' ? colors.parent2 : undefined, color: '#065f46', fontWeight: 'bold' }}>
+              {parents.parent2 || 'Madre'}
+            </button>
+            <button onClick={() => setCurrentView('child1month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child1month' ? 'text-white' : 'bg-gray-100'}`}
+              style={{ backgroundColor: currentView === 'child1month' ? colors.child1 : undefined, color: currentView === 'child1month' ? '#000' : undefined }}>
+              {children.child1 || 'Hijo 1'}
+            </button>
+            <button onClick={() => setCurrentView('child2month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
+              style={{ backgroundColor: currentView === 'child2month' ? colors.child2 : undefined, color: currentView === 'child2month' ? '#000' : undefined }}>
+              {children.child2 || 'Hijo 2'}
+            </button>
+          </div>
         </div>
       ) : (
         /* Botones normales para madre e hijos */
@@ -2344,6 +2461,7 @@ const CoParentingApp = () => {
         {currentView === 'weekAssign' && <WeekAssignView />}
         {currentView === 'week' && <WeekView />}
         {currentView === 'month' && <MonthView />}
+        {currentView === 'year' && <YearCalendar />}
         {currentView === 'globalMonth' && <GlobalMonthCalendar />}
         {currentView === 'child1month' && <ChildMonthView childKey="child1" />}
         {currentView === 'child2month' && <ChildMonthView childKey="child2" />}
