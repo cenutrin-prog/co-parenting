@@ -221,15 +221,23 @@ const CoParentingApp = () => {
     }
   };
   
-  // Guardar UN turno individual en Supabase
+  // Guardar UN turno individual en Supabase (usando upsert para evitar duplicados)
   const saveOneTurno = async (fecha, quien, valor) => {
     try {
+      console.log('saveOneTurno llamado:', { fecha, quien, valor });
+      
       // Primero obtenemos el turno actual de esa fecha
-      const { data: turnoExistente } = await supabase
+      const { data: turnosExistentes, error: selectError } = await supabase
         .from('turnos')
         .select('*')
-        .eq('fecha', fecha)
-        .single();
+        .eq('fecha', fecha);
+      
+      if (selectError) {
+        console.error('Error buscando turno existente:', selectError);
+      }
+      
+      // Tomar el primer registro si hay duplicados
+      const turnoExistente = turnosExistentes && turnosExistentes.length > 0 ? turnosExistentes[0] : null;
       
       let turnoData = {
         fecha,
@@ -256,20 +264,23 @@ const CoParentingApp = () => {
         turnoData.turno_madre = valor || null;
       }
       
-      // Borrar y volver a insertar (upsert simple)
-      await supabase.from('turnos').delete().eq('fecha', fecha);
+      // Borrar TODOS los registros de esa fecha (para limpiar duplicados)
+      const { error: deleteError } = await supabase.from('turnos').delete().eq('fecha', fecha);
+      if (deleteError) {
+        console.error('Error borrando turnos antiguos:', deleteError);
+      }
       
       // Solo insertar si hay algún dato
       if (turnoData.turno_padre || turnoData.turno_madre) {
-        const { error } = await supabase.from('turnos').insert(turnoData);
-        if (error) {
-          console.error('Error guardando turno:', error);
+        const { error: insertError } = await supabase.from('turnos').insert(turnoData);
+        if (insertError) {
+          console.error('Error guardando turno:', insertError);
           setLastSaveStatus('error');
           return;
         }
+        console.log('Turno guardado correctamente:', turnoData);
       }
       
-      console.log('Turno guardado:', { fecha, quien, valor });
       setLastSaveStatus('success');
       setTimeout(() => setLastSaveStatus(null), 2000);
       
@@ -421,9 +432,17 @@ const CoParentingApp = () => {
         setNotes(newNotes);
       }
       
+      // Cargar turnos - con más logging para debug
+      console.log('Intentando cargar turnos...');
       const { data: turnosData, error: turnosError } = await supabase.from('turnos').select('*');
-      if (turnosError) console.error('Error cargando turnos:', turnosError);
-      if (turnosData && turnosData.length > 0) {
+      console.log('Respuesta turnos:', { turnosData, turnosError, count: turnosData?.length });
+      
+      if (turnosError) {
+        console.error('Error cargando turnos:', turnosError);
+      }
+      
+      // Cargar turnos aunque haya habido algún warning
+      if (turnosData) {
         const newTurnos = {};
         turnosData.forEach(t => {
           if (t.turno_padre) {
@@ -434,8 +453,11 @@ const CoParentingApp = () => {
           }
           if (t.turno_madre) newTurnos[`${t.fecha}_madre`] = t.turno_madre;
         });
+        console.log('Turnos procesados:', newTurnos);
         setTurnos(newTurnos);
         console.log('Turnos cargados:', Object.keys(newTurnos).length);
+      } else {
+        console.log('No hay datos de turnos o turnosData es null');
       }
     } catch (err) { console.error('Error inesperado al cargar:', err); }
   }, [parents, children]);
@@ -2342,27 +2364,35 @@ const CoParentingApp = () => {
                         <div key={`${monthIdx}-${date.getDate()}`} 
                           className="rounded-sm flex flex-col overflow-hidden"
                           style={{ 
-                            height: 18,
+                            height: 22,
                             border: today ? '2px solid black' : '1px solid #e5e7eb'
                           }}>
-                          {/* Fila superior: colores de custodia */}
+                          {/* Fila superior: número del día */}
+                          <div className="text-[5px] text-center font-bold leading-none bg-white"
+                            style={{ color: redDay ? '#dc2626' : '#666' }}>
+                            {date.getDate()}
+                          </div>
+                          {/* Fila inferior: color de custodia + turno */}
                           <div className="flex flex-1">
                             {sameParent ? (
-                              <div className="w-full" 
-                                style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6' }} />
+                              <div className="w-full flex items-center justify-center" 
+                                style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6' }}>
+                                {turnoCorto && (
+                                  <span className="text-[5px] font-bold text-black">{turnoCorto}</span>
+                                )}
+                              </div>
                             ) : (
                               <>
-                                <div className="w-1/2" 
-                                  style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6' }} />
+                                <div className="w-1/2 flex items-center justify-center" 
+                                  style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6' }}>
+                                  {turnoCorto && (
+                                    <span className="text-[4px] font-bold text-black">{turnoCorto}</span>
+                                  )}
+                                </div>
                                 <div className="w-1/2" 
                                   style={{ backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) : '#f3f4f6' }} />
                               </>
                             )}
-                          </div>
-                          {/* Fila inferior: código de turno */}
-                          <div className="text-[5px] text-center font-bold leading-none bg-white"
-                            style={{ color: turnoCorto ? colors.parent1 : (redDay ? '#dc2626' : '#999') }}>
-                            {turnoCorto || date.getDate()}
                           </div>
                         </div>
                       );
