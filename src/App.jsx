@@ -558,6 +558,10 @@ const CoParentingApp = () => {
         field === 'salida' ? value : parsed.salida
       );
       setTurnos(prev => ({ ...prev, [`${fecha}_padre_actividad`]: newActividad }));
+      // GUARDAR EN SUPABASE
+      if (currentUser === 'parent1') {
+        saveOneTurno(fecha, 'padre_actividad', newActividad);
+      }
     };
 
     const selectStyle = "w-full text-[9px] p-0.5 border rounded";
@@ -590,6 +594,10 @@ const CoParentingApp = () => {
       const newT2 = turnoNum === 2 ? { ...t2, [field]: value } : { ...t2 };
       const newTurno = buildTurnoMadre(newT1.tipo, newT1.entrada, newT1.salida, newT2.tipo, newT2.entrada, newT2.salida);
       setTurnos(prev => ({ ...prev, [`${fecha}_madre`]: newTurno }));
+      // GUARDAR EN SUPABASE
+      if (currentUser === 'parent1') {
+        saveOneTurno(fecha, 'madre', newTurno);
+      }
     };
 
     const selectStyle = "w-full text-[9px] p-0.5 border rounded";
