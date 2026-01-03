@@ -1727,6 +1727,328 @@ const CoParentingApp = () => {
   const isParent = isParent1 || isParent2;
   const isChild = currentUser === 'child1' || currentUser === 'child2';
 
+  // Vista de asignación semanal de custodia
+  const WeekAssignView = () => {
+    const [selectedWeekStart, setSelectedWeekStart] = useState(null);
+    const [assigningStatus, setAssigningStatus] = useState(null); // 'success', 'error', null
+    
+    // Obtener las semanas del mes actual y el siguiente
+    const getWeeksForDisplay = () => {
+      const weeks = [];
+      const today = new Date();
+      
+      // Empezar desde el lunes de la semana actual
+      const currentMonday = new Date(today);
+      const dayOfWeek = currentMonday.getDay();
+      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      currentMonday.setDate(currentMonday.getDate() + diff);
+      
+      // Mostrar 12 semanas (3 meses aprox)
+      for (let i = 0; i < 12; i++) {
+        const weekStart = new Date(currentMonday);
+        weekStart.setDate(currentMonday.getDate() + (i * 7));
+        
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        
+        weeks.push({
+          start: new Date(weekStart),
+          end: new Date(weekEnd),
+          weekNum: getWeekNumber(weekStart)
+        });
+      }
+      
+      return weeks;
+    };
+    
+    const weeks = getWeeksForDisplay();
+    
+    // Formatear fecha corta
+    const formatShortDate = (date) => {
+      return `${date.getDate()}/${date.getMonth() + 1}`;
+    };
+    
+    // Asignar semana completa a un progenitor con la lógica especial del lunes
+    const assignWeekToParent = async (weekStart, parentKey) => {
+      const newSchedule = { ...schedule };
+      const weekDates = [];
+      
+      // Generar los 7 días de la semana (lunes a domingo)
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(weekStart);
+        d.setDate(weekStart.getDate() + i);
+        weekDates.push(d);
+      }
+      
+      // El lunes siguiente (para asignar la mañana)
+      const nextMonday = new Date(weekStart);
+      nextMonday.setDate(weekStart.getDate() + 7);
+      
+      // Determinar el otro progenitor (para la mañana del lunes de inicio)
+      const otherParent = parentKey === 'parent1' ? 'parent2' : 'parent1';
+      
+      // Asignar para ambas hijas
+      ['child1', 'child2'].forEach(childKey => {
+        weekDates.forEach((date, dayIndex) => {
+          const dateStr = formatDate(date);
+          
+          if (dayIndex === 0) {
+            // LUNES de inicio de la semana
+            // Mañana: al OTRO progenitor (el que tenía la semana anterior deja en el cole)
+            const keyManana = `${dateStr}_${childKey}_Mañana`;
+            newSchedule[keyManana] = otherParent;
+            
+            // Tarde y Noche: al progenitor de esta semana
+            const keyTarde = `${dateStr}_${childKey}_Tarde`;
+            const keyNoche = `${dateStr}_${childKey}_Noche`;
+            newSchedule[keyTarde] = parentKey;
+            newSchedule[keyNoche] = parentKey;
+          } else {
+            // MARTES a DOMINGO: todo al progenitor de esta semana
+            periods.forEach(period => {
+              const key = `${dateStr}_${childKey}_${period}`;
+              newSchedule[key] = parentKey;
+            });
+          }
+        });
+        
+        // LUNES SIGUIENTE por la mañana: al progenitor de esta semana (deja en el cole)
+        const nextMondayStr = formatDate(nextMonday);
+        const keyNextMondayManana = `${nextMondayStr}_${childKey}_Mañana`;
+        newSchedule[keyNextMondayManana] = parentKey;
+      });
+      
+      // Actualizar estado local
+      setSchedule(newSchedule);
+      
+      // Guardar en Supabase cada asignación
+      setAssigningStatus('saving');
+      try {
+        const { data: padresData } = await supabase.from('padres').select('id, nombre');
+        const { data: hijasData } = await supabase.from('hijas').select('id, nombre');
+        
+        const padresMap = {};
+        const hijasMap = {};
+        padresData?.forEach(p => { padresMap[p.nombre] = p.id; });
+        hijasData?.forEach(h => { hijasMap[h.nombre] = h.id; });
+        
+        // Preparar todas las asignaciones a guardar
+        const toSave = [];
+        
+        ['child1', 'child2'].forEach(childKey => {
+          const hijaNombre = children[childKey];
+          const hijaId = hijasMap[hijaNombre];
+          if (!hijaId) return;
+          
+          weekDates.forEach((date, dayIndex) => {
+            const dateStr = formatDate(date);
+            
+            if (dayIndex === 0) {
+              // Lunes: mañana al otro, tarde/noche al actual
+              const padreOtroId = padresMap[parents[otherParent]];
+              const padreActualId = padresMap[parents[parentKey]];
+              
+              if (padreOtroId) {
+                toSave.push({ padre_id: padreOtroId, hija_id: hijaId, fecha: dateStr, periodo: 'Mañana', observaciones: null });
+              }
+              if (padreActualId) {
+                toSave.push({ padre_id: padreActualId, hija_id: hijaId, fecha: dateStr, periodo: 'Tarde', observaciones: null });
+                toSave.push({ padre_id: padreActualId, hija_id: hijaId, fecha: dateStr, periodo: 'Noche', observaciones: null });
+              }
+            } else {
+              // Martes a domingo: todo al progenitor de esta semana
+              const padreId = padresMap[parents[parentKey]];
+              if (padreId) {
+                periods.forEach(period => {
+                  toSave.push({ padre_id: padreId, hija_id: hijaId, fecha: dateStr, periodo: period, observaciones: null });
+                });
+              }
+            }
+          });
+          
+          // Lunes siguiente por la mañana
+          const nextMondayStr = formatDate(nextMonday);
+          const padreId = padresMap[parents[parentKey]];
+          if (padreId) {
+            toSave.push({ padre_id: padreId, hija_id: hijaId, fecha: nextMondayStr, periodo: 'Mañana', observaciones: null });
+          }
+        });
+        
+        // Borrar asignaciones existentes para esas fechas
+        const fechasABorrar = [...weekDates.map(d => formatDate(d)), formatDate(nextMonday)];
+        for (const fecha of fechasABorrar) {
+          await supabase.from('asignaciones').delete().eq('fecha', fecha);
+        }
+        
+        // Insertar nuevas asignaciones
+        if (toSave.length > 0) {
+          const { error } = await supabase.from('asignaciones').insert(toSave);
+          if (error) {
+            console.error('Error guardando asignaciones semanales:', error);
+            setAssigningStatus('error');
+            setTimeout(() => setAssigningStatus(null), 3000);
+            return;
+          }
+        }
+        
+        setAssigningStatus('success');
+        setTimeout(() => setAssigningStatus(null), 2000);
+        
+      } catch (err) {
+        console.error('Error en asignación semanal:', err);
+        setAssigningStatus('error');
+        setTimeout(() => setAssigningStatus(null), 3000);
+      }
+    };
+    
+    // Verificar qué progenitor tiene asignada una semana (basado en el martes)
+    const getWeekAssignment = (weekStart) => {
+      // Usamos el martes como referencia (el lunes tiene lógica especial)
+      const tuesday = new Date(weekStart);
+      tuesday.setDate(weekStart.getDate() + 1);
+      const tuesdayStr = formatDate(tuesday);
+      
+      const keyChild1 = `${tuesdayStr}_child1_Mañana`;
+      const assigned = schedule[keyChild1];
+      
+      return assigned || null;
+    };
+
+    return (
+      <div className="p-2 flex flex-col h-full">
+        <div className="text-center mb-3">
+          <div className="text-sm font-bold mb-1">📅 Asignar Custodia Semanal</div>
+          <div className="text-[10px] text-gray-500">
+            Selecciona una semana y asígnala a un progenitor
+          </div>
+          <div className="text-[9px] text-gray-400 mt-1">
+            ⚠️ Lunes mañana = quien deja en el cole (semana anterior)
+          </div>
+        </div>
+        
+        {assigningStatus && (
+          <div className={`text-center text-xs p-1 rounded mb-2 ${
+            assigningStatus === 'success' ? 'bg-green-100 text-green-700' : 
+            assigningStatus === 'error' ? 'bg-red-100 text-red-700' : 
+            'bg-blue-100 text-blue-700'
+          }`}>
+            {assigningStatus === 'success' ? '✓ Semana asignada correctamente' : 
+             assigningStatus === 'error' ? '✗ Error al guardar' : 
+             '⏳ Guardando...'}
+          </div>
+        )}
+        
+        <div className="flex-1 overflow-y-auto">
+          {weeks.map((week, idx) => {
+            const currentAssignment = getWeekAssignment(week.start);
+            const isSelected = selectedWeekStart && formatDate(selectedWeekStart) === formatDate(week.start);
+            
+            return (
+              <div key={idx} className={`border rounded p-2 mb-2 ${isSelected ? 'border-blue-500 border-2' : ''}`}>
+                {/* Cabecera de la semana */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold bg-gray-200 px-2 py-0.5 rounded">
+                      Sem {week.weekNum}
+                    </span>
+                    <span className="text-xs">
+                      {formatShortDate(week.start)} → {formatShortDate(week.end)}
+                    </span>
+                  </div>
+                  {currentAssignment && (
+                    <span className="text-[10px] px-2 py-0.5 rounded font-bold"
+                      style={{ 
+                        backgroundColor: colors[currentAssignment] + '40',
+                        color: currentAssignment === 'parent2' ? '#065f46' : colors[currentAssignment]
+                      }}>
+                      {parents[currentAssignment]}
+                    </span>
+                  )}
+                </div>
+                
+                {/* Botones de asignación */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => assignWeekToParent(week.start, 'parent1')}
+                    disabled={assigningStatus === 'saving'}
+                    className={`flex-1 py-2 rounded text-xs font-bold transition-all ${
+                      currentAssignment === 'parent1' 
+                        ? 'ring-2 ring-offset-1' 
+                        : 'opacity-70 hover:opacity-100'
+                    }`}
+                    style={{ 
+                      backgroundColor: colors.parent1 + (currentAssignment === 'parent1' ? '' : '60'),
+                      color: 'white',
+                      ringColor: colors.parent1
+                    }}>
+                    {parents.parent1 || 'Padre'}
+                  </button>
+                  <button
+                    onClick={() => assignWeekToParent(week.start, 'parent2')}
+                    disabled={assigningStatus === 'saving'}
+                    className={`flex-1 py-2 rounded text-xs font-bold transition-all ${
+                      currentAssignment === 'parent2' 
+                        ? 'ring-2 ring-offset-1' 
+                        : 'opacity-70 hover:opacity-100'
+                    }`}
+                    style={{ 
+                      backgroundColor: colors.parent2 + (currentAssignment === 'parent2' ? '' : '60'),
+                      color: '#065f46',
+                      ringColor: colors.parent2
+                    }}>
+                    {parents.parent2 || 'Madre'}
+                  </button>
+                </div>
+                
+                {/* Vista previa de la semana */}
+                <div className="mt-2 grid grid-cols-8 gap-0.5 text-[7px]">
+                  <div></div>
+                  {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d, i) => (
+                    <div key={d} className="text-center font-bold" style={{ color: i >= 5 ? '#dc2626' : 'inherit' }}>{d}</div>
+                  ))}
+                  {['M', 'T', 'N'].map((p, pIdx) => (
+                    <React.Fragment key={p}>
+                      <div className="text-[6px] font-bold">{p}</div>
+                      {[0, 1, 2, 3, 4, 5, 6].map(dayIdx => {
+                        const date = new Date(week.start);
+                        date.setDate(week.start.getDate() + dayIdx);
+                        const dateStr = formatDate(date);
+                        const period = pIdx === 0 ? 'Mañana' : pIdx === 1 ? 'Tarde' : 'Noche';
+                        const key = `${dateStr}_child1_${period}`;
+                        const assigned = schedule[key];
+                        
+                        return (
+                          <div key={dayIdx} 
+                            className="h-3 rounded"
+                            style={{ backgroundColor: assigned ? colors[assigned] + '80' : '#e5e7eb' }}>
+                          </div>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        
+        {/* Leyenda */}
+        <div className="mt-2 p-2 bg-gray-50 rounded text-[9px]">
+          <div className="font-bold mb-1">📋 Cómo funciona:</div>
+          <div className="text-gray-600">
+            • <strong>Lunes mañana</strong>: El progenitor de la semana anterior deja a las niñas en el cole
+          </div>
+          <div className="text-gray-600">
+            • <strong>Lunes tarde/noche → Domingo</strong>: El progenitor asignado tiene la custodia
+          </div>
+          <div className="text-gray-600">
+            • <strong>Lunes siguiente mañana</strong>: El progenitor asignado deja a las niñas en el cole
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Calendario mensual global (solo para padre - parent1)
   const GlobalMonthCalendar = () => {
     const monthDates = getMonthDates(currentDate);
@@ -1909,6 +2231,10 @@ const CoParentingApp = () => {
           <button onClick={() => setCurrentView('daily')} className={`px-2 py-1 text-xs rounded flex items-center gap-0.5 ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
             <Calendar size={11} /> Día
           </button>
+          <button onClick={() => setCurrentView('weekAssign')} className={`px-2 py-1 text-xs rounded ${currentView === 'weekAssign' ? 'bg-green-600 text-white' : 'bg-gray-100'}`}
+            style={{ fontWeight: 'bold' }}>
+            +Sem
+          </button>
           <button onClick={() => setCurrentView('week')} className={`px-2 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
             Sem
           </button>
@@ -1960,6 +2286,7 @@ const CoParentingApp = () => {
       
       <div className="flex-1 overflow-y-auto">
         {currentView === 'daily' && <DailyView />}
+        {currentView === 'weekAssign' && <WeekAssignView />}
         {currentView === 'week' && <WeekView />}
         {currentView === 'month' && <MonthView />}
         {currentView === 'globalMonth' && <GlobalMonthCalendar />}
