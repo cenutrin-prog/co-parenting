@@ -775,6 +775,34 @@ const CoParentingApp = () => {
                   </div>
                 );
               })}
+              {/* Fila actividad padre (CURSO, MÁSTER, F.O., VIAJE) */}
+              <div className="font-bold text-[6px] flex items-center" style={{ color: '#9333ea' }}>Actividad</div>
+              {weekDates.map((d) => {
+                const turnoKey = getTurnoKey(d);
+                const actividad = turnos[`${turnoKey}_padre_actividad`] || '';
+                const parsed = parseActividadPadre(actividad);
+                const tieneActividad = parsed.tipo || parsed.entrada || parsed.salida;
+                // Abreviar el tipo de actividad
+                const tipoCorto = parsed.tipo ? (
+                  parsed.tipo === 'CLASE MÁSTER' ? 'MÁSTER' : 
+                  parsed.tipo === 'CURSO' ? 'CURSO' : 
+                  parsed.tipo === 'F.O.' ? 'F.O.' : 
+                  parsed.tipo === 'VIAJE' ? 'VIAJE' : 
+                  parsed.tipo === 'OTRO' ? 'OTRO' : parsed.tipo
+                ) : '';
+                return (
+                  <div key={`act_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: tieneActividad ? '#9333ea30' : '#f3f4f6', color: '#9333ea' }}>
+                    {tieneActividad ? (
+                      <>
+                        <div className="text-[6px] font-bold">{tipoCorto}</div>
+                        {(parsed.entrada || parsed.salida) && <div className="text-[5px]">{parsed.entrada || '?'}-{parsed.salida || '?'}</div>}
+                      </>
+                    ) : (
+                      <div className="text-[6px]">-</div>
+                    )}
+                  </div>
+                );
+              })}
               {/* Fila turno madre */}
               <div className="font-bold text-[7px] flex items-center" style={{ color: '#065f46' }}>{parents.parent2 || 'Madre'}</div>
               {weekDates.map((d) => {
@@ -927,6 +955,34 @@ const CoParentingApp = () => {
               <div key={`tp_m_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: turno ? colors.parent1 + '40' : '#f3f4f6', color: colors.parent1 }}>
                 <div className="text-[7px] font-bold">{codigo}</div>
                 {horario && <div className="text-[5px]">{horario}</div>}
+              </div>
+            );
+          })}
+          
+          {/* Fila actividad padre (CURSO, MÁSTER, F.O., VIAJE) */}
+          <div className="font-bold text-[6px] flex items-center" style={{ color: '#9333ea' }}>Actividad</div>
+          {weekDates.map((d) => {
+            const turnoKey = getTurnoKey(d);
+            const actividad = turnos[`${turnoKey}_padre_actividad`] || '';
+            const parsed = parseActividadPadre(actividad);
+            const tieneActividad = parsed.tipo || parsed.entrada || parsed.salida;
+            const tipoCorto = parsed.tipo ? (
+              parsed.tipo === 'CLASE MÁSTER' ? 'MÁSTER' : 
+              parsed.tipo === 'CURSO' ? 'CURSO' : 
+              parsed.tipo === 'F.O.' ? 'F.O.' : 
+              parsed.tipo === 'VIAJE' ? 'VIAJE' : 
+              parsed.tipo === 'OTRO' ? 'OTRO' : parsed.tipo
+            ) : '';
+            return (
+              <div key={`act_m_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: tieneActividad ? '#9333ea30' : '#f3f4f6', color: '#9333ea' }}>
+                {tieneActividad ? (
+                  <>
+                    <div className="text-[6px] font-bold">{tipoCorto}</div>
+                    {(parsed.entrada || parsed.salida) && <div className="text-[5px]">{parsed.entrada || '?'}-{parsed.salida || '?'}</div>}
+                  </>
+                ) : (
+                  <div className="text-[6px]">-</div>
+                )}
               </div>
             );
           })}
@@ -1671,6 +1727,114 @@ const CoParentingApp = () => {
   const isParent = isParent1 || isParent2;
   const isChild = currentUser === 'child1' || currentUser === 'child2';
 
+  // Calendario mensual global (solo para padre - parent1)
+  const GlobalMonthCalendar = () => {
+    const monthDates = getMonthDates(currentDate);
+    const monthLabel = currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    const numRows = Math.ceil(monthDates.length / 7);
+    
+    // Obtener iniciales
+    const getIniciales = (nombre, isParent1Flag) => {
+      if (!nombre) return isParent1Flag ? 'P' : 'M';
+      if (isParent1Flag) {
+        return nombre.split(' ').map(p => p[0]).join('').toUpperCase();
+      } else {
+        return nombre.substring(0, 2);
+      }
+    };
+    
+    const inicialesP1 = getIniciales(parents.parent1, true);
+    const inicialesP2 = getIniciales(parents.parent2, false);
+    const inicialesOther = parents.other ? parents.other.substring(0, 2) : '';
+    const inicialesChild1 = (children.child1 || 'H1').substring(0, 2);
+    const inicialesChild2 = (children.child2 || 'H2').substring(0, 2);
+
+    return (
+      <div className="p-0.5 h-full flex flex-col">
+        <div className="flex items-center justify-between mb-0.5">
+          <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-0.5"><ChevronLeft size={14} /></button>
+          <div className="text-xs font-medium">
+            <span className="font-bold">GLOBAL</span> - {capitalize(monthLabel)}
+          </div>
+          <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-0.5"><ChevronRight size={14} /></button>
+        </div>
+        <div className="flex-1 overflow-hidden">
+          <div className="grid h-full" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: `12px repeat(${numRows}, 1fr)`, gap: 1 }}>
+            {daysOfWeek.map((d, i) => (
+              <div key={d} className="text-[7px] font-bold text-center" 
+                style={{ color: (i === 5 || i === 6) ? '#dc2626' : 'inherit' }}>{d}</div>
+            ))}
+            {monthDates.map((date, idx) => {
+              const dateKey = date ? formatDate(date) : `empty-${idx}`;
+              if (!date) return <div key={dateKey} className="border rounded bg-gray-50" />;
+              const today = isToday(date);
+              const redDay = isRedDay(date);
+
+              return (
+                <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden" style={{ minHeight: 0 }}>
+                  {/* Número del día */}
+                  <div className="flex justify-center">
+                    <span className={`font-bold text-[7px] ${today ? 'bg-black text-white rounded-full w-3 h-3 flex items-center justify-center' : ''}`}
+                      style={{ color: today ? 'white' : (redDay ? '#dc2626' : 'inherit'), fontSize: '7px' }}>
+                      {date.getDate()}
+                    </span>
+                  </div>
+                  {/* Franjas: Mañana, Tarde, Noche */}
+                  <div className="flex-1 flex flex-col gap-0" style={{ marginTop: '1px' }}>
+                    {periods.map((period, pIdx) => {
+                      const c1k = getScheduleKey(date, 'child1', period);
+                      const c2k = getScheduleKey(date, 'child2', period);
+                      const c1Assigned = schedule[c1k];
+                      const c2Assigned = schedule[c2k];
+                      
+                      // Determinar quién tiene a cada hija
+                      const getInitialForAssigned = (assigned) => {
+                        if (assigned === 'parent1') return inicialesP1;
+                        if (assigned === 'parent2') return inicialesP2;
+                        if (assigned === 'other') return inicialesOther;
+                        return '-';
+                      };
+                      
+                      const getColorForAssigned = (assigned) => {
+                        if (assigned === 'parent1') return colors.parent1;
+                        if (assigned === 'parent2') return colors.parent2;
+                        if (assigned === 'other') return colors.other;
+                        return '#e5e7eb';
+                      };
+
+                      return (
+                        <div key={`${dateKey}_${period}_global`} className="flex gap-0.5" style={{ flex: 1, minHeight: 0 }}>
+                          {/* Columna Denia (child1) */}
+                          <div className="flex-1 flex flex-col items-center justify-center rounded" 
+                            style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) + '40' : '#f3f4f6', padding: '0' }}>
+                            <div className="text-[5px] font-bold" style={{ color: colors.child1, lineHeight: 1 }}>{inicialesChild1}</div>
+                            <div className="text-[6px] font-bold" style={{ lineHeight: 1 }}>{getInitialForAssigned(c1Assigned)}</div>
+                          </div>
+                          {/* Columna Elsa (child2) */}
+                          <div className="flex-1 flex flex-col items-center justify-center rounded" 
+                            style={{ backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) + '40' : '#f3f4f6', padding: '0' }}>
+                            <div className="text-[5px] font-bold" style={{ color: colors.child2, lineHeight: 1 }}>{inicialesChild2}</div>
+                            <div className="text-[6px] font-bold" style={{ lineHeight: 1 }}>{getInitialForAssigned(c2Assigned)}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        {/* Leyenda */}
+        <div className="flex justify-center gap-2 mt-1 text-[6px]">
+          <span style={{ color: colors.parent1 }}>● {parents.parent1 || 'Padre'} ({inicialesP1})</span>
+          <span style={{ color: colors.parent2 }}>● {parents.parent2 || 'Madre'} ({inicialesP2})</span>
+          {parents.other && <span style={{ color: colors.other }}>● {parents.other} ({inicialesOther})</span>}
+        </div>
+      </div>
+    );
+  };
+
   // Vista mensual de un hijo específico (para padres)
   const ChildMonthView = ({ childKey }) => {
     const monthDates = getMonthDates(currentDate);
@@ -1751,6 +1915,10 @@ const CoParentingApp = () => {
           <button onClick={() => setCurrentView('month')} className={`px-2 py-1 text-xs rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
             Mes
           </button>
+          <button onClick={() => setCurrentView('globalMonth')} className={`px-2 py-1 text-xs rounded ${currentView === 'globalMonth' ? 'bg-purple-600 text-white' : 'bg-gray-100'}`}
+            style={{ fontWeight: 'bold' }}>
+            Global
+          </button>
           <button onClick={() => setCurrentView('motherMonth')} className={`px-2 py-1 text-xs rounded ${currentView === 'motherMonth' ? 'text-white' : 'bg-gray-100'}`}
             style={{ backgroundColor: currentView === 'motherMonth' ? colors.parent2 : undefined, color: '#065f46', fontWeight: 'bold' }}>
             {parents.parent2 || 'Madre'}
@@ -1794,6 +1962,7 @@ const CoParentingApp = () => {
         {currentView === 'daily' && <DailyView />}
         {currentView === 'week' && <WeekView />}
         {currentView === 'month' && <MonthView />}
+        {currentView === 'globalMonth' && <GlobalMonthCalendar />}
         {currentView === 'child1month' && <ChildMonthView childKey="child1" />}
         {currentView === 'child2month' && <ChildMonthView childKey="child2" />}
         {currentView === 'motherMonth' && <MotherMonthView />}
