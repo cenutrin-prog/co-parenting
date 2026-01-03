@@ -1896,6 +1896,9 @@ const CoParentingApp = () => {
           }
         }
         
+        // Recargar todos los datos desde Supabase para asegurar consistencia
+        await loadScheduleFromSupabase();
+        
         setAssigningStatus('success');
         setTimeout(() => setAssigningStatus(null), 2000);
         
@@ -2149,31 +2152,44 @@ const CoParentingApp = () => {
                       };
                       
                       const getColorForAssigned = (assigned) => {
-                        // Colores más intensos para el calendario global
-                        if (assigned === 'parent1') return '#E53E00'; // Rojo/naranja más intenso
-                        if (assigned === 'parent2') return '#22c55e'; // Verde más intenso
+                        // Colores para el calendario global: Padre amarillo, Madre sin fondo
+                        if (assigned === 'parent1') return '#FBBF24'; // Amarillo intenso para padre
+                        if (assigned === 'parent2') return 'transparent'; // Sin fondo para madre
                         if (assigned === 'other') return '#ec4899'; // Rosa intenso
                         return '#e5e7eb';
                       };
                       
                       const getTextColorForAssigned = (assigned) => {
-                        if (assigned === 'parent1') return '#ffffff'; // Blanco sobre rojo
-                        if (assigned === 'parent2') return '#ffffff'; // Blanco sobre verde
+                        if (assigned === 'parent1') return '#000000'; // Negro sobre amarillo
+                        if (assigned === 'parent2') return '#065f46'; // Verde oscuro para madre (sin fondo)
                         if (assigned === 'other') return '#ffffff';
                         return '#666666';
+                      };
+                      
+                      const getBorderForAssigned = (assigned) => {
+                        if (assigned === 'parent2') return '1px solid #065f46'; // Borde verde para madre
+                        return 'none';
                       };
 
                       return (
                         <div key={`${dateKey}_${period}_global`} className="flex gap-0.5" style={{ flex: 1, minHeight: 0 }}>
                           {/* Columna Denia (child1) */}
                           <div className="flex-1 flex flex-col items-center justify-center rounded" 
-                            style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6', padding: '0' }}>
+                            style={{ 
+                              backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6', 
+                              border: c1Assigned ? getBorderForAssigned(c1Assigned) : 'none',
+                              padding: '0' 
+                            }}>
                             <div className="text-[5px] font-bold" style={{ color: c1Assigned ? getTextColorForAssigned(c1Assigned) : colors.child1, lineHeight: 1 }}>{inicialesChild1}</div>
                             <div className="text-[6px] font-bold" style={{ color: c1Assigned ? getTextColorForAssigned(c1Assigned) : '#666', lineHeight: 1 }}>{getInitialForAssigned(c1Assigned)}</div>
                           </div>
                           {/* Columna Elsa (child2) */}
                           <div className="flex-1 flex flex-col items-center justify-center rounded" 
-                            style={{ backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) : '#f3f4f6', padding: '0' }}>
+                            style={{ 
+                              backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) : '#f3f4f6', 
+                              border: c2Assigned ? getBorderForAssigned(c2Assigned) : 'none',
+                              padding: '0' 
+                            }}>
                             <div className="text-[5px] font-bold" style={{ color: c2Assigned ? getTextColorForAssigned(c2Assigned) : colors.child2, lineHeight: 1 }}>{inicialesChild2}</div>
                             <div className="text-[6px] font-bold" style={{ color: c2Assigned ? getTextColorForAssigned(c2Assigned) : '#666', lineHeight: 1 }}>{getInitialForAssigned(c2Assigned)}</div>
                           </div>
@@ -2188,8 +2204,8 @@ const CoParentingApp = () => {
         </div>
         {/* Leyenda */}
         <div className="flex justify-center gap-2 mt-1 text-[6px]">
-          <span style={{ color: '#E53E00' }}>● {parents.parent1 || 'Padre'} ({inicialesP1})</span>
-          <span style={{ color: '#22c55e' }}>● {parents.parent2 || 'Madre'} ({inicialesP2})</span>
+          <span><span style={{ backgroundColor: '#FBBF24', padding: '0 3px', borderRadius: '2px' }}>●</span> {parents.parent1 || 'Padre'} ({inicialesP1})</span>
+          <span style={{ color: '#065f46' }}>○ {parents.parent2 || 'Madre'} ({inicialesP2})</span>
           {parents.other && <span style={{ color: '#ec4899' }}>● {parents.other} ({inicialesOther})</span>}
         </div>
       </div>
