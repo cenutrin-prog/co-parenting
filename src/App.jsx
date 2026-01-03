@@ -1729,44 +1729,49 @@ const CoParentingApp = () => {
 
   // Vista de asignación semanal de custodia
   const WeekAssignView = () => {
-    const [selectedWeekStart, setSelectedWeekStart] = useState(null);
+    const [weekOffset, setWeekOffset] = useState(0); // 0 = semana actual, 1 = siguiente, -1 = anterior, etc.
     const [assigningStatus, setAssigningStatus] = useState(null); // 'success', 'error', null
     
-    // Obtener las semanas del mes actual y el siguiente
-    const getWeeksForDisplay = () => {
-      const weeks = [];
+    // Obtener la semana actual basada en el offset
+    const getCurrentWeek = () => {
       const today = new Date();
       
-      // Empezar desde el lunes de la semana actual
+      // Calcular el lunes de la semana actual
       const currentMonday = new Date(today);
       const dayOfWeek = currentMonday.getDay();
       const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
       currentMonday.setDate(currentMonday.getDate() + diff);
       
-      // Mostrar 12 semanas (3 meses aprox)
-      for (let i = 0; i < 12; i++) {
-        const weekStart = new Date(currentMonday);
-        weekStart.setDate(currentMonday.getDate() + (i * 7));
-        
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6);
-        
-        weeks.push({
-          start: new Date(weekStart),
-          end: new Date(weekEnd),
-          weekNum: getWeekNumber(weekStart)
-        });
-      }
+      // Aplicar el offset de semanas
+      const weekStart = new Date(currentMonday);
+      weekStart.setDate(currentMonday.getDate() + (weekOffset * 7));
       
-      return weeks;
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      
+      return {
+        start: weekStart,
+        end: weekEnd,
+        weekNum: getWeekNumber(weekStart)
+      };
     };
     
-    const weeks = getWeeksForDisplay();
+    const week = getCurrentWeek();
     
     // Formatear fecha corta
     const formatShortDate = (date) => {
       return `${date.getDate()}/${date.getMonth() + 1}`;
     };
+    
+    // Formatear fecha con nombre del mes
+    const formatLongDate = (date) => {
+      return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+    };
+    
+    // Navegación entre semanas
+    const goToPreviousWeek = () => setWeekOffset(prev => prev - 1);
+    const goToNextWeek = () => setWeekOffset(prev => prev + 1);
+    const goToCurrentWeek = () => setWeekOffset(0);
     
     // Asignar semana completa a un progenitor con la lógica especial del lunes
     const assignWeekToParent = async (weekStart, parentKey) => {
@@ -1913,21 +1918,51 @@ const CoParentingApp = () => {
       
       return assigned || null;
     };
+    
+    const currentAssignment = getWeekAssignment(week.start);
 
     return (
-      <div className="p-2 flex flex-col h-full">
-        <div className="text-center mb-3">
-          <div className="text-sm font-bold mb-1">📅 Asignar Custodia Semanal</div>
-          <div className="text-[10px] text-gray-500">
-            Selecciona una semana y asígnala a un progenitor
-          </div>
+      <div className="p-3 flex flex-col h-full">
+        {/* Título */}
+        <div className="text-center mb-2">
+          <div className="text-sm font-bold">📅 Asignar Custodia Semanal</div>
           <div className="text-[9px] text-gray-400 mt-1">
             ⚠️ Lunes mañana = quien deja en el cole (semana anterior)
           </div>
         </div>
         
+        {/* Navegación de semanas */}
+        <div className="flex items-center justify-between mb-3 bg-gray-100 rounded-lg p-2">
+          <button 
+            onClick={goToPreviousWeek}
+            className="p-2 bg-white rounded-full shadow hover:bg-gray-50 active:bg-gray-100">
+            <ChevronLeft size={24} />
+          </button>
+          
+          <div className="text-center flex-1">
+            <div className="text-lg font-bold">Semana {week.weekNum}</div>
+            <div className="text-sm text-gray-600">
+              {formatLongDate(week.start)} → {formatLongDate(week.end)}
+            </div>
+            {weekOffset !== 0 && (
+              <button 
+                onClick={goToCurrentWeek}
+                className="text-[10px] text-blue-600 underline mt-1">
+                Ir a semana actual
+              </button>
+            )}
+          </div>
+          
+          <button 
+            onClick={goToNextWeek}
+            className="p-2 bg-white rounded-full shadow hover:bg-gray-50 active:bg-gray-100">
+            <ChevronRight size={24} />
+          </button>
+        </div>
+        
+        {/* Estado de guardado */}
         {assigningStatus && (
-          <div className={`text-center text-xs p-1 rounded mb-2 ${
+          <div className={`text-center text-xs p-2 rounded mb-3 ${
             assigningStatus === 'success' ? 'bg-green-100 text-green-700' : 
             assigningStatus === 'error' ? 'bg-red-100 text-red-700' : 
             'bg-blue-100 text-blue-700'
@@ -1938,102 +1973,98 @@ const CoParentingApp = () => {
           </div>
         )}
         
-        <div className="flex-1 overflow-y-auto">
-          {weeks.map((week, idx) => {
-            const currentAssignment = getWeekAssignment(week.start);
-            const isSelected = selectedWeekStart && formatDate(selectedWeekStart) === formatDate(week.start);
-            
-            return (
-              <div key={idx} className={`border rounded p-2 mb-2 ${isSelected ? 'border-blue-500 border-2' : ''}`}>
-                {/* Cabecera de la semana */}
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold bg-gray-200 px-2 py-0.5 rounded">
-                      Sem {week.weekNum}
-                    </span>
-                    <span className="text-xs">
-                      {formatShortDate(week.start)} → {formatShortDate(week.end)}
-                    </span>
-                  </div>
-                  {currentAssignment && (
-                    <span className="text-[10px] px-2 py-0.5 rounded font-bold"
+        {/* Estado actual de la semana */}
+        {currentAssignment && (
+          <div className="text-center mb-3 p-2 rounded-lg"
+            style={{ 
+              backgroundColor: colors[currentAssignment] + '30',
+              borderLeft: `4px solid ${colors[currentAssignment]}`
+            }}>
+            <span className="text-sm">Asignada a: </span>
+            <span className="text-sm font-bold"
+              style={{ color: currentAssignment === 'parent2' ? '#065f46' : colors[currentAssignment] }}>
+              {parents[currentAssignment]}
+            </span>
+          </div>
+        )}
+        
+        {/* Botones de asignación */}
+        <div className="flex gap-3 mb-4">
+          <button
+            onClick={() => assignWeekToParent(week.start, 'parent1')}
+            disabled={assigningStatus === 'saving'}
+            className={`flex-1 py-4 rounded-lg text-sm font-bold transition-all shadow ${
+              currentAssignment === 'parent1' 
+                ? 'ring-4 ring-offset-2' 
+                : 'opacity-80 hover:opacity-100'
+            }`}
+            style={{ 
+              backgroundColor: colors.parent1,
+              color: 'white',
+              ringColor: colors.parent1
+            }}>
+            {parents.parent1 || 'Padre'}
+          </button>
+          <button
+            onClick={() => assignWeekToParent(week.start, 'parent2')}
+            disabled={assigningStatus === 'saving'}
+            className={`flex-1 py-4 rounded-lg text-sm font-bold transition-all shadow ${
+              currentAssignment === 'parent2' 
+                ? 'ring-4 ring-offset-2' 
+                : 'opacity-80 hover:opacity-100'
+            }`}
+            style={{ 
+              backgroundColor: colors.parent2,
+              color: '#065f46',
+              ringColor: colors.parent2
+            }}>
+            {parents.parent2 || 'Madre'}
+          </button>
+        </div>
+        
+        {/* Vista previa de la semana - más grande */}
+        <div className="border rounded-lg p-3 bg-gray-50 mb-3">
+          <div className="text-[10px] font-bold text-center mb-2 text-gray-600">Vista previa de la asignación</div>
+          <div className="grid grid-cols-8 gap-1 text-[9px]">
+            <div></div>
+            {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((d, i) => {
+              const date = new Date(week.start);
+              date.setDate(week.start.getDate() + i);
+              return (
+                <div key={d} className="text-center">
+                  <div className="font-bold" style={{ color: i >= 5 ? '#dc2626' : 'inherit' }}>{d}</div>
+                  <div className="text-[8px] text-gray-500">{date.getDate()}</div>
+                </div>
+              );
+            })}
+            {[{ label: 'Mañana', short: 'M' }, { label: 'Tarde', short: 'T' }, { label: 'Noche', short: 'N' }].map((p) => (
+              <React.Fragment key={p.short}>
+                <div className="text-[8px] font-bold flex items-center">{p.label}</div>
+                {[0, 1, 2, 3, 4, 5, 6].map(dayIdx => {
+                  const date = new Date(week.start);
+                  date.setDate(week.start.getDate() + dayIdx);
+                  const dateStr = formatDate(date);
+                  const key = `${dateStr}_child1_${p.label}`;
+                  const assigned = schedule[key];
+                  
+                  return (
+                    <div key={dayIdx} 
+                      className="h-6 rounded flex items-center justify-center text-[8px] font-bold"
                       style={{ 
-                        backgroundColor: colors[currentAssignment] + '40',
-                        color: currentAssignment === 'parent2' ? '#065f46' : colors[currentAssignment]
+                        backgroundColor: assigned ? colors[assigned] : '#e5e7eb',
+                        color: assigned ? (assigned === 'parent2' ? '#065f46' : 'white') : '#999'
                       }}>
-                      {parents[currentAssignment]}
-                    </span>
-                  )}
-                </div>
-                
-                {/* Botones de asignación */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => assignWeekToParent(week.start, 'parent1')}
-                    disabled={assigningStatus === 'saving'}
-                    className={`flex-1 py-2 rounded text-xs font-bold transition-all ${
-                      currentAssignment === 'parent1' 
-                        ? 'ring-2 ring-offset-1' 
-                        : 'opacity-70 hover:opacity-100'
-                    }`}
-                    style={{ 
-                      backgroundColor: colors.parent1 + (currentAssignment === 'parent1' ? '' : '60'),
-                      color: 'white',
-                      ringColor: colors.parent1
-                    }}>
-                    {parents.parent1 || 'Padre'}
-                  </button>
-                  <button
-                    onClick={() => assignWeekToParent(week.start, 'parent2')}
-                    disabled={assigningStatus === 'saving'}
-                    className={`flex-1 py-2 rounded text-xs font-bold transition-all ${
-                      currentAssignment === 'parent2' 
-                        ? 'ring-2 ring-offset-1' 
-                        : 'opacity-70 hover:opacity-100'
-                    }`}
-                    style={{ 
-                      backgroundColor: colors.parent2 + (currentAssignment === 'parent2' ? '' : '60'),
-                      color: '#065f46',
-                      ringColor: colors.parent2
-                    }}>
-                    {parents.parent2 || 'Madre'}
-                  </button>
-                </div>
-                
-                {/* Vista previa de la semana */}
-                <div className="mt-2 grid grid-cols-8 gap-0.5 text-[7px]">
-                  <div></div>
-                  {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d, i) => (
-                    <div key={d} className="text-center font-bold" style={{ color: i >= 5 ? '#dc2626' : 'inherit' }}>{d}</div>
-                  ))}
-                  {['M', 'T', 'N'].map((p, pIdx) => (
-                    <React.Fragment key={p}>
-                      <div className="text-[6px] font-bold">{p}</div>
-                      {[0, 1, 2, 3, 4, 5, 6].map(dayIdx => {
-                        const date = new Date(week.start);
-                        date.setDate(week.start.getDate() + dayIdx);
-                        const dateStr = formatDate(date);
-                        const period = pIdx === 0 ? 'Mañana' : pIdx === 1 ? 'Tarde' : 'Noche';
-                        const key = `${dateStr}_child1_${period}`;
-                        const assigned = schedule[key];
-                        
-                        return (
-                          <div key={dayIdx} 
-                            className="h-3 rounded"
-                            style={{ backgroundColor: assigned ? colors[assigned] + '80' : '#e5e7eb' }}>
-                          </div>
-                        );
-                      })}
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+                      {assigned ? (assigned === 'parent1' ? 'P' : 'M') : '-'}
+                    </div>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
         </div>
         
         {/* Leyenda */}
-        <div className="mt-2 p-2 bg-gray-50 rounded text-[9px]">
+        <div className="p-2 bg-gray-50 rounded text-[9px]">
           <div className="font-bold mb-1">📋 Cómo funciona:</div>
           <div className="text-gray-600">
             • <strong>Lunes mañana</strong>: El progenitor de la semana anterior deja a las niñas en el cole
@@ -2118,25 +2149,33 @@ const CoParentingApp = () => {
                       };
                       
                       const getColorForAssigned = (assigned) => {
-                        if (assigned === 'parent1') return colors.parent1;
-                        if (assigned === 'parent2') return colors.parent2;
-                        if (assigned === 'other') return colors.other;
+                        // Colores más intensos para el calendario global
+                        if (assigned === 'parent1') return '#E53E00'; // Rojo/naranja más intenso
+                        if (assigned === 'parent2') return '#22c55e'; // Verde más intenso
+                        if (assigned === 'other') return '#ec4899'; // Rosa intenso
                         return '#e5e7eb';
+                      };
+                      
+                      const getTextColorForAssigned = (assigned) => {
+                        if (assigned === 'parent1') return '#ffffff'; // Blanco sobre rojo
+                        if (assigned === 'parent2') return '#ffffff'; // Blanco sobre verde
+                        if (assigned === 'other') return '#ffffff';
+                        return '#666666';
                       };
 
                       return (
                         <div key={`${dateKey}_${period}_global`} className="flex gap-0.5" style={{ flex: 1, minHeight: 0 }}>
                           {/* Columna Denia (child1) */}
                           <div className="flex-1 flex flex-col items-center justify-center rounded" 
-                            style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) + '40' : '#f3f4f6', padding: '0' }}>
-                            <div className="text-[5px] font-bold" style={{ color: colors.child1, lineHeight: 1 }}>{inicialesChild1}</div>
-                            <div className="text-[6px] font-bold" style={{ lineHeight: 1 }}>{getInitialForAssigned(c1Assigned)}</div>
+                            style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6', padding: '0' }}>
+                            <div className="text-[5px] font-bold" style={{ color: c1Assigned ? getTextColorForAssigned(c1Assigned) : colors.child1, lineHeight: 1 }}>{inicialesChild1}</div>
+                            <div className="text-[6px] font-bold" style={{ color: c1Assigned ? getTextColorForAssigned(c1Assigned) : '#666', lineHeight: 1 }}>{getInitialForAssigned(c1Assigned)}</div>
                           </div>
                           {/* Columna Elsa (child2) */}
                           <div className="flex-1 flex flex-col items-center justify-center rounded" 
-                            style={{ backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) + '40' : '#f3f4f6', padding: '0' }}>
-                            <div className="text-[5px] font-bold" style={{ color: colors.child2, lineHeight: 1 }}>{inicialesChild2}</div>
-                            <div className="text-[6px] font-bold" style={{ lineHeight: 1 }}>{getInitialForAssigned(c2Assigned)}</div>
+                            style={{ backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) : '#f3f4f6', padding: '0' }}>
+                            <div className="text-[5px] font-bold" style={{ color: c2Assigned ? getTextColorForAssigned(c2Assigned) : colors.child2, lineHeight: 1 }}>{inicialesChild2}</div>
+                            <div className="text-[6px] font-bold" style={{ color: c2Assigned ? getTextColorForAssigned(c2Assigned) : '#666', lineHeight: 1 }}>{getInitialForAssigned(c2Assigned)}</div>
                           </div>
                         </div>
                       );
@@ -2149,9 +2188,9 @@ const CoParentingApp = () => {
         </div>
         {/* Leyenda */}
         <div className="flex justify-center gap-2 mt-1 text-[6px]">
-          <span style={{ color: colors.parent1 }}>● {parents.parent1 || 'Padre'} ({inicialesP1})</span>
-          <span style={{ color: colors.parent2 }}>● {parents.parent2 || 'Madre'} ({inicialesP2})</span>
-          {parents.other && <span style={{ color: colors.other }}>● {parents.other} ({inicialesOther})</span>}
+          <span style={{ color: '#E53E00' }}>● {parents.parent1 || 'Padre'} ({inicialesP1})</span>
+          <span style={{ color: '#22c55e' }}>● {parents.parent2 || 'Madre'} ({inicialesP2})</span>
+          {parents.other && <span style={{ color: '#ec4899' }}>● {parents.other} ({inicialesOther})</span>}
         </div>
       </div>
     );
