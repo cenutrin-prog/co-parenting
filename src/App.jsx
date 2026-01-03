@@ -2088,29 +2088,38 @@ const CoParentingApp = () => {
     const monthDates = getMonthDates(currentDate);
     const monthLabel = currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
     
-    // Obtener iniciales
-    const getIniciales = (nombre, isParent1Flag) => {
-      if (!nombre) return isParent1Flag ? 'P' : 'M';
-      if (isParent1Flag) {
-        return nombre.split(' ').map(p => p[0]).join('').toUpperCase();
-      } else {
-        return nombre.substring(0, 2);
-      }
-    };
-    
-    const inicialesP1 = getIniciales(parents.parent1, true);
-    const inicialesP2 = getIniciales(parents.parent2, false);
-    const inicialesOther = parents.other ? parents.other.substring(0, 2) : '';
     // Solo primera letra para las hijas
     const inicialChild1 = (children.child1 || 'H')[0].toUpperCase();
     const inicialChild2 = (children.child2 || 'H')[0].toUpperCase();
 
-    // Colores para el calendario global
+    // Colores para el calendario global: Azul padre, Amarillo madre, Rosa otro
     const getColorForAssigned = (assigned) => {
-      if (assigned === 'parent1') return '#FBBF24'; // Amarillo para padre
-      if (assigned === 'parent2') return '#bbf7d0'; // Verde claro para madre
-      if (assigned === 'other') return '#f9a8d4'; // Rosa claro
+      if (assigned === 'parent1') return '#3b82f6'; // Azul para padre
+      if (assigned === 'parent2') return '#FBBF24'; // Amarillo para madre
+      if (assigned === 'other') return '#f472b6'; // Rosa para otro
       return '#e5e7eb';
+    };
+    
+    // Obtener código corto del turno del padre (sin horario)
+    const getTurnoCorto = (turnoStr) => {
+      if (!turnoStr) return '';
+      // Extraer solo el código (antes del paréntesis o espacio)
+      const codigo = turnoStr.split(' ')[0].split('(')[0];
+      return codigo;
+    };
+    
+    // Obtener actividad del padre (CURSO, MÁSTER, etc.)
+    const getActividadCorta = (actividadStr) => {
+      if (!actividadStr) return '';
+      const parsed = parseActividadPadre(actividadStr);
+      if (!parsed.tipo) return '';
+      // Abreviar
+      if (parsed.tipo === 'CLASE MÁSTER') return 'MÁS';
+      if (parsed.tipo === 'CURSO') return 'CUR';
+      if (parsed.tipo === 'F.O.') return 'FO';
+      if (parsed.tipo === 'VIAJE') return 'VIA';
+      if (parsed.tipo === 'OTRO') return 'OTR';
+      return parsed.tipo.substring(0, 3);
     };
 
     return (
@@ -2126,16 +2135,16 @@ const CoParentingApp = () => {
         {/* Leyenda arriba */}
         <div className="flex justify-center gap-3 mb-2 text-[9px]">
           <span className="flex items-center gap-1">
-            <span style={{ backgroundColor: '#FBBF24', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
+            <span style={{ backgroundColor: '#3b82f6', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
             {parents.parent1 || 'Padre'}
           </span>
           <span className="flex items-center gap-1">
-            <span style={{ backgroundColor: '#bbf7d0', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
+            <span style={{ backgroundColor: '#FBBF24', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
             {parents.parent2 || 'Madre'}
           </span>
           {parents.other && (
             <span className="flex items-center gap-1">
-              <span style={{ backgroundColor: '#f9a8d4', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
+              <span style={{ backgroundColor: '#f472b6', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
               {parents.other}
             </span>
           )}
@@ -2153,15 +2162,31 @@ const CoParentingApp = () => {
               
               const today = isToday(date);
               const redDay = isRedDay(date);
+              
+              // Obtener turnos de trabajo
+              const turnoKey = getTurnoKey(date);
+              const turnoPadre = turnos[`${turnoKey}_padre`] || '';
+              const actividadPadre = turnos[`${turnoKey}_padre_actividad`] || '';
+              const turnoCorto = getTurnoCorto(turnoPadre);
+              const actividadCorta = getActividadCorta(actividadPadre);
 
               return (
                 <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden min-h-[52px]">
-                  {/* Número del día */}
-                  <div className="flex justify-center mb-1">
+                  {/* Cabecera: número del día + turno */}
+                  <div className="flex items-start justify-between mb-0.5">
                     <span className={`font-bold text-[9px] ${today ? 'bg-black text-white rounded-full w-4 h-4 flex items-center justify-center' : ''}`}
                       style={{ color: today ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
                       {date.getDate()}
                     </span>
+                    {/* Turno y actividad */}
+                    <div className="text-right" style={{ lineHeight: 1 }}>
+                      {turnoCorto && (
+                        <div className="text-[6px] font-bold" style={{ color: colors.parent1 }}>{turnoCorto}</div>
+                      )}
+                      {actividadCorta && (
+                        <div className="text-[5px] font-bold" style={{ color: '#9333ea' }}>{actividadCorta}</div>
+                      )}
+                    </div>
                   </div>
                   
                   {/* Franjas: Mañana, Tarde, Noche */}
@@ -2176,12 +2201,18 @@ const CoParentingApp = () => {
                         <div key={`${dateKey}_${period}_global`} className="flex gap-0.5 flex-1">
                           {/* Columna hija 1 */}
                           <div className="flex-1 flex items-center justify-center rounded text-[7px] font-bold"
-                            style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6' }}>
+                            style={{ 
+                              backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6',
+                              color: c1Assigned === 'parent1' ? 'white' : 'black'
+                            }}>
                             {c1Assigned ? inicialChild1 : '-'}
                           </div>
                           {/* Columna hija 2 */}
                           <div className="flex-1 flex items-center justify-center rounded text-[7px] font-bold"
-                            style={{ backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) : '#f3f4f6' }}>
+                            style={{ 
+                              backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) : '#f3f4f6',
+                              color: c2Assigned === 'parent1' ? 'white' : 'black'
+                            }}>
                             {c2Assigned ? inicialChild2 : '-'}
                           </div>
                         </div>
@@ -2197,18 +2228,18 @@ const CoParentingApp = () => {
     );
   };
 
-  // Calendario anual (solo colores, sin letras)
+  // Calendario anual con turnos de trabajo
   const YearCalendar = () => {
     const currentYear = currentDate.getFullYear();
     const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
                         'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const dayLetters = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
     
-    // Colores para el calendario anual
+    // Colores para el calendario anual: Azul padre, Amarillo madre, Rosa otro
     const getColorForAssigned = (assigned) => {
-      if (assigned === 'parent1') return '#FBBF24'; // Amarillo para padre
-      if (assigned === 'parent2') return '#86efac'; // Verde para madre
-      if (assigned === 'other') return '#f9a8d4'; // Rosa
+      if (assigned === 'parent1') return '#3b82f6'; // Azul para padre
+      if (assigned === 'parent2') return '#FBBF24'; // Amarillo para madre
+      if (assigned === 'other') return '#f472b6'; // Rosa
       return '#e5e7eb'; // Gris
     };
 
@@ -2223,31 +2254,38 @@ const CoParentingApp = () => {
       for (let i = 1; i <= lastDay.getDate(); i++) dates.push(new Date(year, month, i));
       return dates;
     };
+    
+    // Obtener código corto del turno del padre (sin horario)
+    const getTurnoCorto = (turnoStr) => {
+      if (!turnoStr) return '';
+      const codigo = turnoStr.split(' ')[0].split('(')[0];
+      return codigo;
+    };
 
     return (
-      <div className="p-1 h-full flex flex-col overflow-hidden">
+      <div className="p-2 h-full flex flex-col overflow-hidden">
         {/* Cabecera con año y navegación */}
-        <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center justify-between mb-2">
           <button onClick={() => setCurrentDate(d => { const nd = new Date(d); nd.setFullYear(nd.getFullYear() - 1); return nd; })} 
-            className="p-1"><ChevronLeft size={16} /></button>
-          <div className="text-sm font-bold">{currentYear}</div>
+            className="p-1"><ChevronLeft size={20} /></button>
+          <div className="text-lg font-bold">{currentYear}</div>
           <button onClick={() => setCurrentDate(d => { const nd = new Date(d); nd.setFullYear(nd.getFullYear() + 1); return nd; })} 
-            className="p-1"><ChevronRight size={16} /></button>
+            className="p-1"><ChevronRight size={20} /></button>
         </div>
         
         {/* Leyenda */}
-        <div className="flex justify-center gap-2 mb-1 text-[8px]">
+        <div className="flex justify-center gap-3 mb-2 text-[10px]">
           <span className="flex items-center gap-1">
-            <span style={{ backgroundColor: '#FBBF24', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
+            <span style={{ backgroundColor: '#3b82f6', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
             {parents.parent1 || 'Padre'}
           </span>
           <span className="flex items-center gap-1">
-            <span style={{ backgroundColor: '#86efac', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
+            <span style={{ backgroundColor: '#FBBF24', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
             {parents.parent2 || 'Madre'}
           </span>
           {parents.other && (
             <span className="flex items-center gap-1">
-              <span style={{ backgroundColor: '#f9a8d4', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
+              <span style={{ backgroundColor: '#f472b6', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
               {parents.other}
             </span>
           )}
@@ -2255,58 +2293,69 @@ const CoParentingApp = () => {
         
         {/* Grid de 12 meses (4 filas x 3 columnas) */}
         <div className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-3 gap-1">
+          <div className="grid grid-cols-3 gap-2">
             {monthNames.map((monthName, monthIdx) => {
               const monthDates = getMonthDatesForYear(monthIdx);
-              const numWeeks = Math.ceil(monthDates.length / 7);
               
               return (
-                <div key={monthIdx} className="border rounded p-0.5">
+                <div key={monthIdx} className="border rounded p-1">
                   {/* Nombre del mes */}
-                  <div className="text-[7px] font-bold text-center mb-0.5">{monthName}</div>
+                  <div className="text-[9px] font-bold text-center mb-1 text-gray-700">{monthName}</div>
                   
                   {/* Días de la semana */}
-                  <div className="grid grid-cols-7 gap-px mb-0.5">
+                  <div className="grid grid-cols-7 gap-0.5 mb-1">
                     {dayLetters.map((d, i) => (
-                      <div key={d} className="text-[5px] text-center font-bold"
-                        style={{ color: i >= 5 ? '#dc2626' : '#666' }}>{d}</div>
+                      <div key={d} className="text-[6px] text-center font-bold"
+                        style={{ color: i >= 5 ? '#dc2626' : '#888' }}>{d}</div>
                     ))}
                   </div>
                   
                   {/* Días del mes */}
-                  <div className="grid grid-cols-7 gap-px">
+                  <div className="grid grid-cols-7 gap-0.5">
                     {monthDates.map((date, idx) => {
-                      if (!date) return <div key={`empty-${monthIdx}-${idx}`} className="h-2" />;
+                      if (!date) return <div key={`empty-${monthIdx}-${idx}`} style={{ height: 18 }} />;
                       
-                      // Obtener asignaciones de ambas hijas para este día
-                      // Usamos la mañana como referencia principal
+                      // Obtener asignaciones de ambas hijas para este día (mañana como referencia)
                       const c1k = getScheduleKey(date, 'child1', 'Mañana');
                       const c2k = getScheduleKey(date, 'child2', 'Mañana');
                       const c1Assigned = schedule[c1k];
                       const c2Assigned = schedule[c2k];
                       
-                      // Si ambas hijas están con el mismo, usamos ese color
-                      // Si están con diferentes, dividimos el cuadrado
+                      // Obtener turno de trabajo
+                      const turnoKey = getTurnoKey(date);
+                      const turnoPadre = turnos[`${turnoKey}_padre`] || '';
+                      const turnoCorto = getTurnoCorto(turnoPadre);
+                      
                       const sameParent = c1Assigned === c2Assigned;
                       const today = isToday(date);
+                      const redDay = isRedDay(date);
                       
                       return (
                         <div key={`${monthIdx}-${date.getDate()}`} 
-                          className="h-2 rounded-sm flex overflow-hidden"
+                          className="rounded-sm flex flex-col overflow-hidden"
                           style={{ 
-                            border: today ? '1px solid black' : 'none'
+                            height: 18,
+                            border: today ? '2px solid black' : '1px solid #e5e7eb'
                           }}>
-                          {sameParent ? (
-                            <div className="w-full h-full" 
-                              style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#e5e7eb' }} />
-                          ) : (
-                            <>
-                              <div className="w-1/2 h-full" 
-                                style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#e5e7eb' }} />
-                              <div className="w-1/2 h-full" 
-                                style={{ backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) : '#e5e7eb' }} />
-                            </>
-                          )}
+                          {/* Fila superior: colores de custodia */}
+                          <div className="flex flex-1">
+                            {sameParent ? (
+                              <div className="w-full" 
+                                style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6' }} />
+                            ) : (
+                              <>
+                                <div className="w-1/2" 
+                                  style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6' }} />
+                                <div className="w-1/2" 
+                                  style={{ backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) : '#f3f4f6' }} />
+                              </>
+                            )}
+                          </div>
+                          {/* Fila inferior: código de turno */}
+                          <div className="text-[5px] text-center font-bold leading-none bg-white"
+                            style={{ color: turnoCorto ? colors.parent1 : (redDay ? '#dc2626' : '#999') }}>
+                            {turnoCorto || date.getDate()}
+                          </div>
                         </div>
                       );
                     })}
