@@ -468,21 +468,21 @@ const CoParentingApp = () => {
   }, [step, parents.parent1, children.child1, loadScheduleFromSupabase]);
 
   const saveScheduleInSupabase = async () => {
-    // Esta función ahora es solo un respaldo para forzar sincronización completa
-    // Normalmente cada cambio se guarda automáticamente
+    // Sincronización completa de todos los datos
     setIsSaving(true);
     try {
-      // Guardar asignaciones
-      const keys = Object.keys(schedule).filter(k => schedule[k]);
-      console.log('Sincronización completa - Asignaciones:', keys.length);
-      
+      // Obtener mapas de IDs
       const { data: padresData } = await supabase.from('padres').select('id, nombre');
       const { data: hijasData } = await supabase.from('hijas').select('id, nombre');
       const padresMap = {}; const hijasMap = {};
       padresData?.forEach(p => { padresMap[p.nombre] = p.id; });
       hijasData?.forEach(h => { hijasMap[h.nombre] = h.id; });
       
-      const upserts = [];
+      // Preparar asignaciones
+      const keys = Object.keys(schedule).filter(k => schedule[k]);
+      console.log('Sincronización completa - Asignaciones:', keys.length);
+      
+      const asignacionesPorFecha = {};
       for (const k of keys) {
         const parts = k.split('_'); 
         if (parts.length < 3) continue;
@@ -500,24 +500,22 @@ const CoParentingApp = () => {
         
         if (!padreId || !hijaId) continue;
         
-        upserts.push({ padre_id: padreId, hija_id: hijaId, fecha, periodo, observaciones: notes[k] || null });
+        if (!asignacionesPorFecha[fecha]) asignacionesPorFecha[fecha] = [];
+        asignacionesPorFecha[fecha].push({ padre_id: padreId, hija_id: hijaId, fecha, periodo, observaciones: notes[k] || null });
       }
       
-      if (upserts.length > 0) {
-        // Usar upsert para evitar errores con la restricción UNIQUE
-        const { error: upsertError } = await supabase
-          .from('asignaciones')
-          .upsert(upserts, { onConflict: 'fecha,periodo,hija_id' });
-        
-        if (upsertError) {
-          console.error('Error en upsert asignaciones:', upsertError);
-          setIsSaving(false);
-          setLastSaveStatus('error');
-          return;
+      // Guardar asignaciones fecha por fecha (borrar + insertar)
+      for (const [fecha, asignaciones] of Object.entries(asignacionesPorFecha)) {
+        await supabase.from('asignaciones').delete().eq('fecha', fecha);
+        if (asignaciones.length > 0) {
+          const { error } = await supabase.from('asignaciones').insert(asignaciones);
+          if (error) {
+            console.error('Error insertando asignaciones para', fecha, error);
+          }
         }
       }
       
-      // Guardar turnos
+      // Preparar turnos
       const turnoKeys = Object.keys(turnos).filter(k => turnos[k]);
       const turnosPorFecha = {};
       turnoKeys.forEach(k => {
@@ -530,29 +528,24 @@ const CoParentingApp = () => {
         if (quien === 'padre_actividad') turnosPorFecha[fecha].actividad_padre = turnos[k];
       });
       
-      const turnoUpserts = Object.entries(turnosPorFecha).map(([fecha, data]) => {
+      // Guardar turnos fecha por fecha (borrar + insertar)
+      for (const [fecha, data] of Object.entries(turnosPorFecha)) {
         let turnoPadreCompleto = data.turno_padre || '';
         if (data.actividad_padre) {
           turnoPadreCompleto = turnoPadreCompleto ? `${turnoPadreCompleto}||${data.actividad_padre}` : `||${data.actividad_padre}`;
         }
-        return {
-          fecha, 
-          turno_padre: turnoPadreCompleto || null, 
-          turno_madre: data.turno_madre || null
-        };
-      });
-      
-      if (turnoUpserts.length > 0) {
-        // Usar upsert para evitar errores con la restricción UNIQUE
-        const { error: upsertError } = await supabase
-          .from('turnos')
-          .upsert(turnoUpserts, { onConflict: 'fecha' });
         
-        if (upsertError) {
-          console.error('Error en upsert turnos:', upsertError);
-          setIsSaving(false);
-          setLastSaveStatus('error');
-          return;
+        await supabase.from('turnos').delete().eq('fecha', fecha);
+        
+        if (turnoPadreCompleto || data.turno_madre) {
+          const { error } = await supabase.from('turnos').insert({
+            fecha,
+            turno_padre: turnoPadreCompleto || null,
+            turno_madre: data.turno_madre || null
+          });
+          if (error) {
+            console.error('Error insertando turno para', fecha, error);
+          }
         }
       }
       
