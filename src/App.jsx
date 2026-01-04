@@ -504,16 +504,13 @@ const CoParentingApp = () => {
       }
       
       if (upserts.length > 0) {
-        // Agrupar por fecha para borrar y luego insertar
-        const fechasUnicas = [...new Set(upserts.map(u => u.fecha))];
+        // Usar upsert para evitar errores con la restricción UNIQUE
+        const { error: upsertError } = await supabase
+          .from('asignaciones')
+          .upsert(upserts, { onConflict: 'fecha,periodo,hija_id' });
         
-        for (const fecha of fechasUnicas) {
-          await supabase.from('asignaciones').delete().eq('fecha', fecha);
-        }
-        
-        const { error: insertError } = await supabase.from('asignaciones').insert(upserts);
-        if (insertError) {
-          console.error('Error insertando asignaciones:', insertError);
+        if (upsertError) {
+          console.error('Error en upsert asignaciones:', upsertError);
           setIsSaving(false);
           setLastSaveStatus('error');
           return;
@@ -546,12 +543,13 @@ const CoParentingApp = () => {
       });
       
       if (turnoUpserts.length > 0) {
-        for (const t of turnoUpserts) {
-          await supabase.from('turnos').delete().eq('fecha', t.fecha);
-        }
-        const { error: insertError } = await supabase.from('turnos').insert(turnoUpserts);
-        if (insertError) {
-          console.error('Error insertando turnos:', insertError);
+        // Usar upsert para evitar errores con la restricción UNIQUE
+        const { error: upsertError } = await supabase
+          .from('turnos')
+          .upsert(turnoUpserts, { onConflict: 'fecha' });
+        
+        if (upsertError) {
+          console.error('Error en upsert turnos:', upsertError);
           setIsSaving(false);
           setLastSaveStatus('error');
           return;
@@ -2117,6 +2115,15 @@ const CoParentingApp = () => {
           <div className="text-gray-600">
             • <strong>Lunes siguiente mañana</strong>: El progenitor asignado deja a las niñas en el cole
           </div>
+        </div>
+        
+        {/* Botón de sincronizar */}
+        <div className="mt-3">
+          <button onClick={saveScheduleInSupabase} 
+            disabled={isSaving}
+            className={`w-full py-2 rounded-lg text-sm font-bold ${isSaving ? 'bg-gray-300' : 'bg-blue-600 text-white'}`}>
+            {isSaving ? 'Sincronizando...' : (lastSaveStatus === 'success' ? '✓ Sincronizado' : (lastSaveStatus === 'error' ? '✗ Error' : '🔄 Sincronizar todo'))}
+          </button>
         </div>
       </div>
     );
