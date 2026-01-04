@@ -1913,10 +1913,15 @@ const CoParentingApp = () => {
           }
         });
         
-        // Borrar asignaciones existentes para esas fechas
-        const fechasABorrar = [...weekDates.map(d => formatDate(d)), formatDate(nextMonday)];
-        for (const fecha of fechasABorrar) {
-          await supabase.from('asignaciones').delete().eq('fecha', fecha);
+        // Borrar asignaciones existentes para esas fechas y periodos específicos
+        // Usamos un borrado más específico para evitar conflictos con la restricción UNIQUE
+        for (const asig of toSave) {
+          await supabase
+            .from('asignaciones')
+            .delete()
+            .eq('fecha', asig.fecha)
+            .eq('periodo', asig.periodo)
+            .eq('hija_id', asig.hija_id);
         }
         
         // Insertar nuevas asignaciones
