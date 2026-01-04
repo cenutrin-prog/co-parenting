@@ -1930,7 +1930,12 @@ const CoParentingApp = () => {
         await loadScheduleFromSupabase();
         
         setAssigningStatus('success');
-        setTimeout(() => setAssigningStatus(null), 2000);
+        
+        // Avanzar a la siguiente semana después de 1 segundo
+        setTimeout(() => {
+          setAssigningStatus(null);
+          setWeekOffset(prev => prev + 1);
+        }, 1000);
         
       } catch (err) {
         console.error('Error en asignación semanal:', err);
