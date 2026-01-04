@@ -1862,6 +1862,15 @@ const CoParentingApp = () => {
         padresData?.forEach(p => { padresMap[p.nombre] = p.id; });
         hijasData?.forEach(h => { hijasMap[h.nombre] = h.id; });
         
+        // Debug: mostrar mapas
+        console.log('padresMap:', padresMap);
+        console.log('hijasMap:', hijasMap);
+        console.log('parents:', parents);
+        console.log('parentKey:', parentKey);
+        console.log('otherParent:', otherParent);
+        console.log('Buscando padre:', parents[parentKey], '-> ID:', padresMap[parents[parentKey]]);
+        console.log('Buscando otro padre:', parents[otherParent], '-> ID:', padresMap[parents[otherParent]]);
+        
         // Preparar todas las asignaciones a guardar
         const toSave = [];
         
