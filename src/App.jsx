@@ -1871,8 +1871,8 @@ const CoParentingApp = () => {
         console.log('Buscando padre:', parents[parentKey], '-> ID:', padresMap[parents[parentKey]]);
         console.log('Buscando otro padre:', parents[otherParent], '-> ID:', padresMap[parents[otherParent]]);
         
-        // Preparar todas las asignaciones a guardar
-        const toSave = [];
+        // Preparar todas las asignaciones a guardar usando un Map para evitar duplicados
+        const toSaveMap = new Map();
         
         ['child1', 'child2'].forEach(childKey => {
           const hijaNombre = children[childKey];
@@ -1888,18 +1888,22 @@ const CoParentingApp = () => {
               const padreActualId = padresMap[parents[parentKey]];
               
               if (padreOtroId) {
-                toSave.push({ padre_id: padreOtroId, hija_id: hijaId, fecha: dateStr, periodo: 'Mañana', observaciones: null });
+                const key = `${dateStr}_${hijaId}_Mañana`;
+                toSaveMap.set(key, { padre_id: padreOtroId, hija_id: hijaId, fecha: dateStr, periodo: 'Mañana', observaciones: null });
               }
               if (padreActualId) {
-                toSave.push({ padre_id: padreActualId, hija_id: hijaId, fecha: dateStr, periodo: 'Tarde', observaciones: null });
-                toSave.push({ padre_id: padreActualId, hija_id: hijaId, fecha: dateStr, periodo: 'Noche', observaciones: null });
+                const keyT = `${dateStr}_${hijaId}_Tarde`;
+                const keyN = `${dateStr}_${hijaId}_Noche`;
+                toSaveMap.set(keyT, { padre_id: padreActualId, hija_id: hijaId, fecha: dateStr, periodo: 'Tarde', observaciones: null });
+                toSaveMap.set(keyN, { padre_id: padreActualId, hija_id: hijaId, fecha: dateStr, periodo: 'Noche', observaciones: null });
               }
             } else {
               // Martes a domingo: todo al progenitor de esta semana
               const padreId = padresMap[parents[parentKey]];
               if (padreId) {
                 periods.forEach(period => {
-                  toSave.push({ padre_id: padreId, hija_id: hijaId, fecha: dateStr, periodo: period, observaciones: null });
+                  const key = `${dateStr}_${hijaId}_${period}`;
+                  toSaveMap.set(key, { padre_id: padreId, hija_id: hijaId, fecha: dateStr, periodo: period, observaciones: null });
                 });
               }
             }
@@ -1909,29 +1913,28 @@ const CoParentingApp = () => {
           const nextMondayStr = formatDate(nextMonday);
           const padreId = padresMap[parents[parentKey]];
           if (padreId) {
-            toSave.push({ padre_id: padreId, hija_id: hijaId, fecha: nextMondayStr, periodo: 'Mañana', observaciones: null });
+            const key = `${nextMondayStr}_${hijaId}_Mañana`;
+            toSaveMap.set(key, { padre_id: padreId, hija_id: hijaId, fecha: nextMondayStr, periodo: 'Mañana', observaciones: null });
           }
         });
         
-        // Borrar asignaciones existentes para esas fechas y periodos específicos
-        // Usamos un borrado más específico para evitar conflictos con la restricción UNIQUE
+        const toSave = Array.from(toSaveMap.values());
+        console.log('Asignaciones a guardar:', toSave.length);
+        
+        // Borrar e insertar uno por uno para evitar conflictos
         for (const asig of toSave) {
+          // Primero borrar si existe
           await supabase
             .from('asignaciones')
             .delete()
             .eq('fecha', asig.fecha)
             .eq('periodo', asig.periodo)
             .eq('hija_id', asig.hija_id);
-        }
-        
-        // Insertar nuevas asignaciones
-        if (toSave.length > 0) {
-          const { error } = await supabase.from('asignaciones').insert(toSave);
+          
+          // Luego insertar
+          const { error } = await supabase.from('asignaciones').insert(asig);
           if (error) {
-            console.error('Error guardando asignaciones semanales:', error);
-            setAssigningStatus('error');
-            setTimeout(() => setAssigningStatus(null), 3000);
-            return;
+            console.error('Error insertando asignación:', asig, error);
           }
         }
         
