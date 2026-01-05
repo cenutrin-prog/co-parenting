@@ -166,29 +166,28 @@ const CoParentingApp = () => {
       const childKey = parts[1];
       const periodo = parts.slice(2).join('_');
       
-      // Obtener IDs de padre e hija
-      const { data: padresData } = await supabase.from('padres').select('id, nombre');
-      const { data: hijasData } = await supabase.from('hijas').select('id, nombre');
-      
-      const padresMap = {};
-      const hijasMap = {};
-      padresData?.forEach(p => { padresMap[p.nombre] = p.id; });
-      hijasData?.forEach(h => { hijasMap[h.nombre] = h.id; });
-      
-      // Primero verificamos que la hija existe (esto siempre es necesario)
+      // Obtener solo los datos necesarios
       const hijaNombre = children[childKey];
       if (!hijaNombre) {
         console.log('saveOneAsignacion: Falta hija', { childKey });
         return;
       }
       
-      const hijaId = hijasMap[hijaNombre];
-      if (!hijaId) {
-        console.log('saveOneAsignacion: No se encontró ID de hija', { hijaNombre });
+      // Buscar solo la hija que necesitamos
+      const { data: hijaData } = await supabase
+        .from('hijas')
+        .select('id')
+        .eq('nombre', hijaNombre)
+        .single();
+      
+      if (!hijaData) {
+        console.log('saveOneAsignacion: No se encontró hija en BD', { hijaNombre });
         return;
       }
       
-      // SIEMPRE borrar la asignación existente para esta fecha/hija/periodo
+      const hijaId = hijaData.id;
+      
+      // SIEMPRE borrar la asignación existente primero
       await supabase
         .from('asignaciones')
         .delete()
@@ -196,22 +195,32 @@ const CoParentingApp = () => {
         .eq('hija_id', hijaId)
         .eq('periodo', periodo);
       
-      // Solo insertar si hay un padre asignado (parentKey no está vacío)
+      // Solo insertar si hay un padre asignado (parentKey no es vacío)
       if (parentKey && parentKey !== '') {
         const padreNombre = parents[parentKey];
-        const padreId = padresMap[padreNombre];
-        
-        if (!padreNombre || !padreId) {
-          console.log('saveOneAsignacion: No se encontró padre', { parentKey, padreNombre });
-          // Aún así marcamos éxito porque el borrado sí se hizo
+        if (!padreNombre) {
+          console.log('saveOneAsignacion: parentKey no válido', { parentKey });
           setLastSaveStatus('success');
           setTimeout(() => setLastSaveStatus(null), 2000);
           return;
         }
         
+        // Buscar solo el padre que necesitamos
+        const { data: padreData } = await supabase
+          .from('padres')
+          .select('id')
+          .eq('nombre', padreNombre)
+          .single();
+        
+        if (!padreData) {
+          console.log('saveOneAsignacion: No se encontró padre en BD', { padreNombre });
+          setLastSaveStatus('error');
+          return;
+        }
+        
         const { error } = await supabase
           .from('asignaciones')
-          .insert({ padre_id: padreId, hija_id: hijaId, fecha, periodo, observaciones: null });
+          .insert({ padre_id: padreData.id, hija_id: hijaId, fecha, periodo, observaciones: null });
         
         if (error) {
           console.error('Error guardando asignación:', error);
