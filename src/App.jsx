@@ -166,72 +166,81 @@ const CoParentingApp = () => {
       const childKey = parts[1];
       const periodo = parts.slice(2).join('_');
       
-      // Primero verificamos que la hija existe (siempre necesario para borrar o insertar)
+      // Obtener el nombre de la hija (siempre necesario)
       const hijaNombre = children[childKey];
       if (!hijaNombre) {
-        console.log('saveOneAsignacion: No se encontró nombre de hija', { childKey });
+        console.log('saveOneAsignacion: No existe hija', { childKey });
         return;
       }
       
-      // Buscar el ID de la hija
-      const { data: hijaData } = await supabase
+      // Buscar ID de la hija en la base de datos
+      const { data: hijaData, error: hijaError } = await supabase
         .from('hijas')
         .select('id')
         .eq('nombre', hijaNombre)
         .single();
       
-      if (!hijaData) {
-        console.log('saveOneAsignacion: No se encontró hija en BD', { hijaNombre });
+      if (hijaError || !hijaData) {
+        console.log('saveOneAsignacion: Hija no encontrada en BD', { hijaNombre, hijaError });
+        setLastSaveStatus('error');
         return;
       }
       
       const hijaId = hijaData.id;
       
-      // SIEMPRE borrar la asignación existente primero (esto es clave)
-      await supabase
+      // PASO 1: SIEMPRE borrar la asignación existente primero
+      const { error: deleteError } = await supabase
         .from('asignaciones')
         .delete()
         .eq('fecha', fecha)
         .eq('hija_id', hijaId)
         .eq('periodo', periodo);
       
-      // Solo insertar si hay un padre asignado (parentKey no está vacío)
-      if (parentKey && parentKey !== '') {
-        const padreNombre = parents[parentKey];
-        if (!padreNombre) {
-          console.log('saveOneAsignacion: No se encontró nombre de padre', { parentKey });
-          setLastSaveStatus('success'); // El borrado sí se hizo
-          setTimeout(() => setLastSaveStatus(null), 2000);
-          return;
-        }
-        
-        // Buscar el ID del padre
-        const { data: padreData } = await supabase
-          .from('padres')
-          .select('id')
-          .eq('nombre', padreNombre)
-          .single();
-        
-        if (!padreData) {
-          console.log('saveOneAsignacion: No se encontró padre en BD', { padreNombre });
-          setLastSaveStatus('error');
-          return;
-        }
-        
-        const { error } = await supabase
-          .from('asignaciones')
-          .insert({ padre_id: padreData.id, hija_id: hijaId, fecha, periodo, observaciones: null });
-        
-        if (error) {
-          console.error('Error guardando asignación:', error);
-          setLastSaveStatus('error');
-          return;
-        }
-        console.log('Asignación guardada:', { fecha, childKey, periodo, parentKey });
-      } else {
-        console.log('Asignación borrada:', { fecha, childKey, periodo });
+      if (deleteError) {
+        console.error('Error borrando asignación:', deleteError);
+        setLastSaveStatus('error');
+        return;
       }
       
+      // PASO 2: Si parentKey está vacío, solo queríamos borrar (ya hecho arriba)
+      if (!parentKey || parentKey === '') {
+        console.log('Asignación borrada:', { fecha, childKey, periodo });
+        setLastSaveStatus('success');
+        setTimeout(() => setLastSaveStatus(null), 2000);
+        return;
+      }
+      
+      // PASO 3: Si hay parentKey, buscar el padre e insertar
+      const padreNombre = parents[parentKey];
+      if (!padreNombre) {
+        console.log('saveOneAsignacion: No existe padre', { parentKey });
+        setLastSaveStatus('error');
+        return;
+      }
+      
+      const { data: padreData, error: padreError } = await supabase
+        .from('padres')
+        .select('id')
+        .eq('nombre', padreNombre)
+        .single();
+      
+      if (padreError || !padreData) {
+        console.log('saveOneAsignacion: Padre no encontrado en BD', { padreNombre, padreError });
+        setLastSaveStatus('error');
+        return;
+      }
+      
+      const { error: insertError } = await supabase
+        .from('asignaciones')
+        .insert({ padre_id: padreData.id, hija_id: hijaId, fecha, periodo, observaciones: null });
+      
+      if (insertError) {
+        console.error('Error insertando asignación:', insertError);
+        setLastSaveStatus('error');
+        return;
+      }
+      
+      console.log('Asignación guardada:', { fecha, childKey, periodo, parentKey });
       setLastSaveStatus('success');
       setTimeout(() => setLastSaveStatus(null), 2000);
       
@@ -325,6 +334,60 @@ const CoParentingApp = () => {
       saveOneTurno(fecha, quien, value);
     }
   }, [currentUser]);
+
+  // Función para limpiar todas las asignaciones y turnos de un día
+  const limpiarDiaCompleto = async (fecha) => {
+    if (!confirm('¿Borrar TODAS las asignaciones y turnos de este día?')) return;
+    
+    setIsSaving(true);
+    try {
+      // Obtener IDs de las hijas
+      const { data: hijasData } = await supabase.from('hijas').select('id, nombre');
+      const hijasMap = {};
+      hijasData?.forEach(h => { hijasMap[h.nombre] = h.id; });
+      
+      // Borrar asignaciones de ambas hijas para los 3 periodos
+      for (const childKey of ['child1', 'child2']) {
+        const hijaNombre = children[childKey];
+        const hijaId = hijasMap[hijaNombre];
+        if (hijaId) {
+          await supabase
+            .from('asignaciones')
+            .delete()
+            .eq('fecha', fecha)
+            .eq('hija_id', hijaId);
+        }
+      }
+      
+      // Borrar turnos de ese día
+      await supabase.from('turnos').delete().eq('fecha', fecha);
+      
+      // Limpiar estado local
+      const newSchedule = { ...schedule };
+      const newTurnos = { ...turnos };
+      ['child1', 'child2'].forEach(child => {
+        ['Mañana', 'Tarde', 'Noche'].forEach(period => {
+          delete newSchedule[`${fecha}_${child}_${period}`];
+        });
+      });
+      delete newTurnos[`${fecha}_padre`];
+      delete newTurnos[`${fecha}_padre_actividad`];
+      delete newTurnos[`${fecha}_madre`];
+      
+      setSchedule(newSchedule);
+      setTurnos(newTurnos);
+      
+      setIsSaving(false);
+      setLastSaveStatus('success');
+      setTimeout(() => setLastSaveStatus(null), 2000);
+      console.log('Día limpiado:', fecha);
+      
+    } catch (err) {
+      console.error('Error limpiando día:', err);
+      setIsSaving(false);
+      setLastSaveStatus('error');
+    }
+  };
 
   // Parsear turno del padre para mostrar en dos líneas
   const parseTurnoPadre = (turno) => {
@@ -690,6 +753,11 @@ const CoParentingApp = () => {
                   className={`px-3 py-1 text-xs rounded font-bold ${isSaving ? 'bg-gray-400' : 'bg-blue-600'} text-white`}>
                   {isSaving ? 'Sincronizando...' : 'Sincronizar'}
                 </button>
+                <button onClick={() => limpiarDiaCompleto(turnoKey)} 
+                  disabled={isSaving}
+                  className="px-2 py-1 text-xs rounded font-bold bg-red-500 text-white">
+                  Limpiar
+                </button>
                 {lastSaveStatus === 'success' && (
                   <span className="text-green-600 text-xs">✓</span>
                 )}
@@ -711,6 +779,7 @@ const CoParentingApp = () => {
           <div className="mb-1 p-1.5 border rounded bg-gray-50">
             <div className="text-[10px] font-bold mb-1">Turnos de trabajo</div>
             <div className="flex gap-2">
+              {/* Turno del padre - SOLO visible para parent1 */}
               {currentUser === 'parent1' && (
                 <div className="flex-1">
                   <div className="text-[10px] font-medium mb-0.5" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
@@ -723,6 +792,7 @@ const CoParentingApp = () => {
                   <ActividadPadreSelector fecha={turnoKey} />
                 </div>
               )}
+              {/* Turno de la madre - visible para ambos */}
               <div className="flex-1">
                 <div className="text-[10px] font-medium mb-0.5" style={{ color: colors.parent2 }}>{parents.parent2 || 'Madre'}</div>
                 <TurnoMadreSelector fecha={turnoKey} />
@@ -769,7 +839,7 @@ const CoParentingApp = () => {
   };
 
   // VISTA SEMANA
-  const WeekCalendar = ({ showTurnos = true, childFilter = null, showHeader = true, showOnlyMotherTurnos = false }) => {
+  const WeekCalendar = ({ showTurnos = true, childFilter = null, showHeader = true }) => {
     const weekDates = getWeekDates(currentDate);
     const isParentUser = currentUser === 'parent1' || currentUser === 'parent2';
     const isChildUser = currentUser === 'child1' || currentUser === 'child2';
@@ -805,8 +875,8 @@ const CoParentingApp = () => {
           
           {showTurnos && (
             <>
-              {/* Fila turno padre - SOLO si no es showOnlyMotherTurnos */}
-              {!showOnlyMotherTurnos && (
+              {/* Fila turno padre - SOLO visible para parent1 */}
+              {currentUser === 'parent1' && (
                 <>
                   <div className="font-bold text-[7px] flex items-center" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
                   {weekDates.map((d) => {
@@ -822,8 +892,8 @@ const CoParentingApp = () => {
                   })}
                 </>
               )}
-              {/* Fila actividad padre - SOLO si no es showOnlyMotherTurnos */}
-              {!showOnlyMotherTurnos && (
+              {/* Fila actividad padre - SOLO visible para parent1 */}
+              {currentUser === 'parent1' && (
                 <>
                   <div className="font-bold text-[6px] flex items-center" style={{ color: '#9333ea' }}>Actividad</div>
                   {weekDates.map((d) => {
@@ -854,7 +924,7 @@ const CoParentingApp = () => {
                   })}
                 </>
               )}
-              {/* Fila turno madre */}
+              {/* Fila turno madre - visible para ambos padres */}
               <div className="font-bold text-[7px] flex items-center" style={{ color: '#065f46' }}>{parents.parent2 || 'Madre'}</div>
               {weekDates.map((d) => {
                 const turnoKey = getTurnoKey(d);
@@ -1133,7 +1203,7 @@ const CoParentingApp = () => {
           </div>
           <button onClick={() => setCurrentDate(d => addDays(d, 7))} className="p-1"><ChevronRight size={14} /></button>
         </div>
-        <WeekCalendar showTurnos={true} showOnlyMotherTurnos={currentUser === 'parent2'} />
+        <WeekCalendar showTurnos={true} />
         <GlobalWeekCalendar />
         {/* Calendario de la madre - SOLO para el padre (parent1) */}
         {isParent1 && <MotherWeekCalendar />}
@@ -1278,10 +1348,13 @@ const CoParentingApp = () => {
                     
                     {/* Turnos de los padres */}
                     <div className="flex-1 flex flex-col text-[6px]">
-                      <div className="flex justify-between" style={{ color: colors.parent1 }}>
-                        <span className="font-bold">{inicialesPadre}</span>
-                        <span className="font-bold">{codP || '-'}</span>
-                      </div>
+                      {/* Turno del padre - SOLO visible para parent1 */}
+                      {currentUser === 'parent1' && (
+                        <div className="flex justify-between" style={{ color: colors.parent1 }}>
+                          <span className="font-bold">{inicialesPadre}</span>
+                          <span className="font-bold">{codP || '-'}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between" style={{ color: '#065f46' }}>
                         <span className="font-bold">{inicialesMadre}</span>
                         <span className="font-bold">{turnoMadreCorto || '-'}</span>
@@ -1622,11 +1695,9 @@ const CoParentingApp = () => {
         // Filtrar por periodo si no es global
         if (periodo !== 'global') {
           if (periodo.startsWith('year-')) {
-            // Filtrar por año
             const yearFilter = periodo.replace('year-', '');
             if (fecha.substring(0, 4) !== yearFilter) return;
           } else {
-            // Filtrar por mes
             if (fecha.substring(0, 7) !== periodo) return;
           }
         }
@@ -2439,6 +2510,25 @@ const CoParentingApp = () => {
                       const tAssigned = schedule[tKey];
                       const nAssigned = schedule[nKey];
                       
+                      // Obtener turno y actividad del padre
+                      const turnoKey = getTurnoKey(date);
+                      const turnoPadre = turnos[`${turnoKey}_padre`] || '';
+                      const actividadPadre = turnos[`${turnoKey}_padre_actividad`] || '';
+                      const turnoCorto = getTurnoCorto(turnoPadre);
+                      // Obtener actividad corta
+                      let actividadCorta = '';
+                      if (actividadPadre) {
+                        const tipoParts = actividadPadre.split('|');
+                        if (tipoParts[0]) {
+                          if (tipoParts[0] === 'CLASE MÁSTER') actividadCorta = 'MAS';
+                          else if (tipoParts[0] === 'CURSO') actividadCorta = 'CUR';
+                          else if (tipoParts[0] === 'F.O.') actividadCorta = 'FO';
+                          else if (tipoParts[0] === 'VIAJE') actividadCorta = 'VIA';
+                          else actividadCorta = tipoParts[0].substring(0, 3);
+                        }
+                      }
+                      const textoTurno = turnoCorto || actividadCorta || '';
+                      
                       const today = isToday(date);
                       const redDay = isRedDay(date);
                       
@@ -2458,13 +2548,11 @@ const CoParentingApp = () => {
                             {date.getDate()}
                           </div>
                           {/* 3 franjas horizontales: Mañana, Tarde, Noche */}
-                          <div className="flex-1 flex flex-col">
+                          <div className="flex-1 flex flex-col relative">
                             {allSame ? (
-                              // Si todas las franjas son del mismo padre, mostrar un solo color
                               <div className="flex-1" 
                                 style={{ backgroundColor: mAssigned ? getColorForAssigned(mAssigned) : '#f3f4f6' }} />
                             ) : (
-                              // Mostrar las 3 franjas con sus colores
                               <>
                                 <div className="flex-1" 
                                   style={{ backgroundColor: mAssigned ? getColorForAssigned(mAssigned) : '#f3f4f6' }} />
@@ -2473,6 +2561,12 @@ const CoParentingApp = () => {
                                 <div className="flex-1" 
                                   style={{ backgroundColor: nAssigned ? getColorForAssigned(nAssigned) : '#f3f4f6' }} />
                               </>
+                            )}
+                            {/* Turno o actividad del padre centrado */}
+                            {textoTurno && (
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="text-[4px] font-bold text-black">{textoTurno}</span>
+                              </div>
                             )}
                           </div>
                         </div>
