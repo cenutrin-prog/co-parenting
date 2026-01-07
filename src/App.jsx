@@ -2251,21 +2251,23 @@ const CoParentingApp = () => {
                 <div key={dateKey} 
                   className="border rounded p-0.5 flex flex-col overflow-hidden min-h-[52px] cursor-pointer hover:border-blue-500"
                   onClick={() => { setCurrentDate(date); setCurrentView('daily'); }}>
-                  {/* Cabecera: número del día + turno */}
+                  {/* Cabecera: número del día + turno (solo para padre) */}
                   <div className="flex items-start justify-between mb-0.5">
                     <span className={`font-bold text-[9px] ${today ? 'bg-black text-white rounded-full w-4 h-4 flex items-center justify-center' : ''}`}
                       style={{ color: today ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
                       {date.getDate()}
                     </span>
-                    {/* Turno y actividad */}
-                    <div className="text-right" style={{ lineHeight: 1 }}>
-                      {turnoCorto && (
-                        <div className="text-[6px] font-bold" style={{ color: colors.parent1 }}>{turnoCorto}</div>
-                      )}
-                      {actividadCorta && (
-                        <div className="text-[5px] font-bold" style={{ color: '#9333ea' }}>{actividadCorta}</div>
-                      )}
-                    </div>
+                    {/* Turno y actividad - SOLO visible para parent1 */}
+                    {currentUser === 'parent1' && (
+                      <div className="text-right" style={{ lineHeight: 1 }}>
+                        {turnoCorto && (
+                          <div className="text-[6px] font-bold" style={{ color: colors.parent1 }}>{turnoCorto}</div>
+                        )}
+                        {actividadCorta && (
+                          <div className="text-[5px] font-bold" style={{ color: '#9333ea' }}>{actividadCorta}</div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   
                   {/* Franjas: Mañana, Tarde, Noche */}
@@ -2570,24 +2572,21 @@ const CoParentingApp = () => {
           </div>
         </div>
       ) : (
-        /* Botones normales para madre e hijos */
+        /* Botones para madre e hijos */
         <div className="flex gap-1.5 p-2 border-b">
           <button onClick={() => setCurrentView('week')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
             Semana
           </button>
-          <button onClick={() => setCurrentView('month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Mes</button>
-          {/* Botones vista mensual hijos - para madre */}
+          {/* Botón Global - solo para madre */}
           {isParent2 && (
-            <>
-              <button onClick={() => setCurrentView('child1month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'child1month' ? 'text-white' : 'bg-gray-100'}`}
-                style={{ backgroundColor: currentView === 'child1month' ? colors.child1 : undefined, color: currentView === 'child1month' ? '#000' : undefined }}>
-                {children.child1 || 'Hijo 1'}
-              </button>
-              <button onClick={() => setCurrentView('child2month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
-                style={{ backgroundColor: currentView === 'child2month' ? colors.child2 : undefined, color: currentView === 'child2month' ? '#000' : undefined }}>
-                {children.child2 || 'Hijo 2'}
-              </button>
-            </>
+            <button onClick={() => setCurrentView('globalMonth')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'globalMonth' ? 'bg-purple-600 text-white' : 'bg-gray-100'}`}
+              style={{ fontWeight: 'bold' }}>
+              Global
+            </button>
+          )}
+          {/* Botón Mes - solo para hijos */}
+          {isChild && (
+            <button onClick={() => setCurrentView('month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Mes</button>
           )}
         </div>
       )}
