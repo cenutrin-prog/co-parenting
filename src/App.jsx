@@ -1432,32 +1432,40 @@ const CoParentingApp = () => {
     const [mesSeleccionadoMadre, setMesSeleccionadoMadre] = useState('global');
     const [mesSeleccionadoOtro, setMesSeleccionadoOtro] = useState('global');
 
-    // Obtener lista de meses disponibles desde el schedule
-    const getMesesDisponibles = () => {
+    // Obtener lista de meses y años disponibles desde el schedule
+    const getPeriodosDisponibles = () => {
       const meses = new Set();
+      const anos = new Set();
       Object.keys(schedule).forEach(key => {
         const fecha = key.split('_')[0];
         if (fecha && fecha.length >= 7) {
           const mesAno = fecha.substring(0, 7); // "2025-01"
+          const ano = fecha.substring(0, 4); // "2025"
           meses.add(mesAno);
+          anos.add(ano);
         }
       });
-      const mesesArray = Array.from(meses).sort();
-      return mesesArray;
+      return {
+        meses: Array.from(meses).sort(),
+        anos: Array.from(anos).sort()
+      };
     };
 
-    const mesesDisponibles = getMesesDisponibles();
+    const periodosDisponibles = getPeriodosDisponibles();
 
-    // Formatear mes para mostrar (2025-01 -> Enero 2025)
-    const formatearMes = (mesAno) => {
-      if (mesAno === 'global') return 'Global';
-      const [ano, mes] = mesAno.split('-');
+    // Formatear periodo para mostrar
+    const formatearPeriodo = (periodo) => {
+      if (periodo === 'global') return 'Global';
+      if (periodo.startsWith('year-')) {
+        return `Año ${periodo.replace('year-', '')}`;
+      }
+      const [ano, mes] = periodo.split('-');
       const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
       return `${meses[parseInt(mes) - 1]} ${ano}`;
     };
 
-    // Calcular estadísticas desde el schedule, filtrando por mes si se especifica
-    const calcularEstadisticas = (mesAno) => {
+    // Calcular estadísticas desde el schedule, filtrando por periodo (mes o año)
+    const calcularEstadisticas = (periodo) => {
       const stats = {
         parent1: { child1: { total: 0, LV: 0, SD: 0 }, child2: { total: 0, LV: 0, SD: 0 }, ambas: { total: 0, LV: 0, SD: 0 } },
         parent2: { child1: { total: 0, LV: 0, SD: 0 }, child2: { total: 0, LV: 0, SD: 0 }, ambas: { total: 0, LV: 0, SD: 0 } },
@@ -1474,10 +1482,16 @@ const CoParentingApp = () => {
         const fecha = parts[0];
         const childKey = parts[1];
 
-        // Filtrar por mes si no es global
-        if (mesAno !== 'global') {
-          const mesAnoFecha = fecha.substring(0, 7);
-          if (mesAnoFecha !== mesAno) return;
+        // Filtrar por periodo si no es global
+        if (periodo !== 'global') {
+          if (periodo.startsWith('year-')) {
+            // Filtrar por año
+            const yearFilter = periodo.replace('year-', '');
+            if (fecha.substring(0, 4) !== yearFilter) return;
+          } else {
+            // Filtrar por mes
+            if (fecha.substring(0, 7) !== periodo) return;
+          }
         }
         
         // Obtener día de la semana (0=domingo, 6=sábado)
@@ -1502,14 +1516,25 @@ const CoParentingApp = () => {
       return stats;
     };
 
-    // Selector de mes
-    const SelectorMes = ({ valor, onChange }) => (
+    // Selector de periodo (años y meses)
+    const SelectorPeriodo = ({ valor, onChange }) => (
       <select value={valor} onChange={e => onChange(e.target.value)}
         className="text-[10px] p-0.5 border rounded bg-white ml-2">
         <option value="global">Global</option>
-        {mesesDisponibles.map(mes => (
-          <option key={mes} value={mes}>{formatearMes(mes)}</option>
-        ))}
+        {periodosDisponibles.anos.length > 0 && (
+          <optgroup label="Por año">
+            {periodosDisponibles.anos.map(ano => (
+              <option key={`year-${ano}`} value={`year-${ano}`}>Año {ano}</option>
+            ))}
+          </optgroup>
+        )}
+        {periodosDisponibles.meses.length > 0 && (
+          <optgroup label="Por mes">
+            {periodosDisponibles.meses.map(mes => (
+              <option key={mes} value={mes}>{formatearPeriodo(mes)}</option>
+            ))}
+          </optgroup>
+        )}
       </select>
     );
 
@@ -1575,7 +1600,7 @@ const CoParentingApp = () => {
     };
 
     // Calcular total de horas trabajadas por cada progenitor en un mes
-    const calcularHorasTrabajadas = (mesAno) => {
+    const calcularHorasTrabajadas = (periodo) => {
       let horasPadre = 0;
       let horasMadre = 0;
       
@@ -1586,10 +1611,14 @@ const CoParentingApp = () => {
         const fecha = parts[0];
         const quien = parts.slice(1).join('_');
         
-        // Filtrar por mes si no es global
-        if (mesAno !== 'global') {
-          const mesAnoFecha = fecha.substring(0, 7);
-          if (mesAnoFecha !== mesAno) return;
+        // Filtrar por periodo si no es global
+        if (periodo !== 'global') {
+          if (periodo.startsWith('year-')) {
+            const yearFilter = periodo.replace('year-', '');
+            if (fecha.substring(0, 4) !== yearFilter) return;
+          } else {
+            if (fecha.substring(0, 7) !== periodo) return;
+          }
         }
         
         if (quien === 'padre') {
@@ -1614,7 +1643,7 @@ const CoParentingApp = () => {
         <div className="mb-4">
           <div className="font-bold text-sm mb-2 p-2 rounded flex items-center justify-between" style={{ backgroundColor: color + '40', color: color === '#86efac' ? '#065f46' : color }}>
             <span>{nombre}</span>
-            <SelectorMes valor={mesSeleccionado} onChange={setMesSeleccionado} />
+            <SelectorPeriodo valor={mesSeleccionado} onChange={setMesSeleccionado} />
           </div>
           <table className="w-full text-xs border-collapse">
             <thead>
@@ -1669,7 +1698,7 @@ const CoParentingApp = () => {
         <div className="mb-4 p-2 bg-gray-50 rounded">
           <div className="flex items-center justify-between mb-2">
             <span className="font-bold text-sm">📊 Resumen</span>
-            <SelectorMes valor={mesSeleccionadoResumen} onChange={setMesSeleccionadoResumen} />
+            <SelectorPeriodo valor={mesSeleccionadoResumen} onChange={setMesSeleccionadoResumen} />
           </div>
           <div className="space-y-2">
             {/* Barra de progreso padre */}
@@ -2394,28 +2423,32 @@ const CoParentingApp = () => {
                   {/* Días del mes */}
                   <div className="grid grid-cols-7 gap-0.5">
                     {monthDates.map((date, idx) => {
-                      if (!date) return <div key={`empty-${monthIdx}-${idx}`} style={{ height: 18 }} />;
+                      if (!date) return <div key={`empty-${monthIdx}-${idx}`} style={{ height: 24 }} />;
                       
-                      // Obtener asignaciones de ambas hijas para este día (mañana como referencia)
-                      const c1k = getScheduleKey(date, 'child1', 'Mañana');
-                      const c2k = getScheduleKey(date, 'child2', 'Mañana');
-                      const c1Assigned = schedule[c1k];
-                      const c2Assigned = schedule[c2k];
+                      // Obtener asignaciones para las 3 franjas (usamos child1 como referencia)
+                      const mKey = getScheduleKey(date, 'child1', 'Mañana');
+                      const tKey = getScheduleKey(date, 'child1', 'Tarde');
+                      const nKey = getScheduleKey(date, 'child1', 'Noche');
+                      const mAssigned = schedule[mKey];
+                      const tAssigned = schedule[tKey];
+                      const nAssigned = schedule[nKey];
                       
                       // Obtener turno de trabajo
                       const turnoKey = getTurnoKey(date);
                       const turnoPadre = turnos[`${turnoKey}_padre`] || '';
                       const turnoCorto = getTurnoCorto(turnoPadre);
                       
-                      const sameParent = c1Assigned === c2Assigned;
                       const today = isToday(date);
                       const redDay = isRedDay(date);
+                      
+                      // Verificar si las 3 franjas son del mismo padre
+                      const allSame = mAssigned === tAssigned && tAssigned === nAssigned;
                       
                       return (
                         <div key={`${monthIdx}-${date.getDate()}`} 
                           className="rounded-sm flex flex-col overflow-hidden"
                           style={{ 
-                            height: 22,
+                            height: 24,
                             border: today ? '2px solid black' : '1px solid #e5e7eb'
                           }}>
                           {/* Fila superior: número del día */}
@@ -2423,26 +2456,26 @@ const CoParentingApp = () => {
                             style={{ color: redDay ? '#dc2626' : '#666' }}>
                             {date.getDate()}
                           </div>
-                          {/* Fila inferior: color de custodia + turno */}
-                          <div className="flex flex-1">
-                            {sameParent ? (
-                              <div className="w-full flex items-center justify-center" 
-                                style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6' }}>
-                                {turnoCorto && (
-                                  <span className="text-[5px] font-bold text-black">{turnoCorto}</span>
-                                )}
-                              </div>
+                          {/* 3 franjas horizontales: Mañana, Tarde, Noche */}
+                          <div className="flex-1 flex flex-col relative">
+                            {allSame ? (
+                              <div className="flex-1" 
+                                style={{ backgroundColor: mAssigned ? getColorForAssigned(mAssigned) : '#f3f4f6' }} />
                             ) : (
                               <>
-                                <div className="w-1/2 flex items-center justify-center" 
-                                  style={{ backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6' }}>
-                                  {turnoCorto && (
-                                    <span className="text-[4px] font-bold text-black">{turnoCorto}</span>
-                                  )}
-                                </div>
-                                <div className="w-1/2" 
-                                  style={{ backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) : '#f3f4f6' }} />
+                                <div className="flex-1" 
+                                  style={{ backgroundColor: mAssigned ? getColorForAssigned(mAssigned) : '#f3f4f6' }} />
+                                <div className="flex-1" 
+                                  style={{ backgroundColor: tAssigned ? getColorForAssigned(tAssigned) : '#f3f4f6' }} />
+                                <div className="flex-1" 
+                                  style={{ backgroundColor: nAssigned ? getColorForAssigned(nAssigned) : '#f3f4f6' }} />
                               </>
+                            )}
+                            {/* Turno del padre centrado */}
+                            {turnoCorto && (
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <span className="text-[4px] font-bold text-black">{turnoCorto}</span>
+                              </div>
                             )}
                           </div>
                         </div>
