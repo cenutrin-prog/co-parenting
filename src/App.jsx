@@ -737,11 +737,32 @@ const CoParentingApp = () => {
                       <div className="text-[10px] font-bold mb-0.5" style={{ color: colors[child] }}>{childName}</div>
                       <select value={scheduleValue} onChange={e => handleScheduleChange(sk, e.target.value)} disabled={isChildUser}
                         className="w-full text-[10px] p-0.5 border rounded mb-0.5"
-                        style={{ backgroundColor: scheduleValue ? colors[scheduleValue] + '40' : 'white' }}>
+                        style={{ 
+                          backgroundColor: scheduleValue ? (
+                            scheduleValue.includes('_decision_') ? '#000000' :
+                            scheduleValue.includes('_pago') ? '#dc2626' :
+                            colors[scheduleValue] + '40'
+                          ) : 'white',
+                          color: (scheduleValue?.includes('_decision_') || scheduleValue?.includes('_pago')) ? 'white' : 'inherit'
+                        }}>
                         <option value="">-</option>
                         <option value="parent1">{parents.parent1 || 'Papá'}</option>
                         <option value="parent2">{parents.parent2 || 'Mamá'}</option>
                         {parents.other && <option value="other">{parents.other}</option>}
+                        {child === 'child1' && (
+                          <>
+                            <option value="parent2_decision_child1">Irene por decisión niña u otro</option>
+                            <option value="parent1_decision_child1">Jose Luis por decisión niña u otro</option>
+                            <option value="parent2_pago_child1">Irene por pago</option>
+                          </>
+                        )}
+                        {child === 'child2' && (
+                          <>
+                            <option value="parent2_decision_child2">Irene por decisión niña u otro</option>
+                            <option value="parent1_decision_child2">Jose Luis por decisión niña u otro</option>
+                            <option value="parent2_pago_child2">Irene por pago</option>
+                          </>
+                        )}
                       </select>
                       <input type="text" placeholder="Obs..." defaultValue={noteValue}
                         onBlur={e => handleNoteChange(sk, e.target.value)} disabled={isChildUser}
@@ -874,12 +895,33 @@ const CoParentingApp = () => {
                       const sk = getScheduleKey(d, child, period);
                       const assigned = schedule[sk];
                       const obs = notes[sk] || '';
-                      const isWithThisParent = assigned === currentUser;
+                      // Verificar si es una asignación especial
+                      const isDecision = assigned?.includes('_decision_');
+                      const isPago = assigned?.includes('_pago');
+                      const baseParent = assigned?.split('_')[0];
+                      const isWithThisParent = assigned === currentUser || (baseParent === currentUser);
                       const displayName = isWithThisParent ? (children[child] || (child === 'child1' ? 'H1' : 'H2')) : '-';
+                      
+                      // Determinar colores
+                      let bgColor = '#e5e7eb';
+                      let txtColor = '#999';
+                      if (isWithThisParent) {
+                        if (isDecision) {
+                          bgColor = '#000000';
+                          txtColor = '#ffffff';
+                        } else if (isPago) {
+                          bgColor = '#dc2626';
+                          txtColor = '#ffffff';
+                        } else {
+                          bgColor = colors[child];
+                          txtColor = '#000';
+                        }
+                      }
+                      
                       return (
                         <div key={sk} onClick={() => obs && setPopupObs(obs)}
                           className="text-[8px] text-center rounded px-0.5 cursor-pointer font-bold w-full"
-                          style={{ backgroundColor: isWithThisParent ? colors[child] : '#e5e7eb', color: isWithThisParent ? '#000' : '#999' }}>
+                          style={{ backgroundColor: bgColor, color: txtColor }}>
                           {displayName}{obs && '*'}
                         </div>
                       );
@@ -1286,15 +1328,59 @@ const CoParentingApp = () => {
                     {periods.map((period) => {
                       const c1k = getScheduleKey(date, 'child1', period);
                       const c2k = getScheduleKey(date, 'child2', period);
-                      const c1a = schedule[c1k] === currentUser;
-                      const c2a = schedule[c2k] === currentUser;
+                      const c1Assigned = schedule[c1k];
+                      const c2Assigned = schedule[c2k];
+                      
+                      // Verificar si es una asignación especial para child1
+                      const c1IsDecision = c1Assigned?.includes('_decision_');
+                      const c1IsPago = c1Assigned?.includes('_pago');
+                      const c1BaseParent = c1Assigned?.split('_')[0];
+                      const c1a = c1Assigned === currentUser || c1BaseParent === currentUser;
+                      
+                      // Verificar si es una asignación especial para child2
+                      const c2IsDecision = c2Assigned?.includes('_decision_');
+                      const c2IsPago = c2Assigned?.includes('_pago');
+                      const c2BaseParent = c2Assigned?.split('_')[0];
+                      const c2a = c2Assigned === currentUser || c2BaseParent === currentUser;
+                      
+                      // Determinar colores para child1
+                      let c1BgColor = '#e5e7eb';
+                      let c1TxtColor = '#999';
+                      if (c1a) {
+                        if (c1IsDecision) {
+                          c1BgColor = '#000000';
+                          c1TxtColor = '#ffffff';
+                        } else if (c1IsPago) {
+                          c1BgColor = '#dc2626';
+                          c1TxtColor = '#ffffff';
+                        } else {
+                          c1BgColor = colors.child1;
+                          c1TxtColor = '#000';
+                        }
+                      }
+                      
+                      // Determinar colores para child2
+                      let c2BgColor = '#e5e7eb';
+                      let c2TxtColor = '#999';
+                      if (c2a) {
+                        if (c2IsDecision) {
+                          c2BgColor = '#000000';
+                          c2TxtColor = '#ffffff';
+                        } else if (c2IsPago) {
+                          c2BgColor = '#dc2626';
+                          c2TxtColor = '#ffffff';
+                        } else {
+                          c2BgColor = colors.child2;
+                          c2TxtColor = '#000';
+                        }
+                      }
                       
                       return (
                         <div key={`${dateKey}_${period}`} className="flex gap-0.5 flex-1">
-                          <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c1a ? colors.child1 : '#e5e7eb' }}>
+                          <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c1BgColor, color: c1TxtColor }}>
                             {c1a ? (children.child1 || 'H1')[0] : '-'}
                           </div>
-                          <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c2a ? colors.child2 : '#e5e7eb' }}>
+                          <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c2BgColor, color: c2TxtColor }}>
                             {c2a ? (children.child2 || 'H2')[0] : '-'}
                           </div>
                         </div>
@@ -1469,11 +1555,15 @@ const CoParentingApp = () => {
       const stats = {
         parent1: { child1: { total: 0, LV: 0, SD: 0 }, child2: { total: 0, LV: 0, SD: 0 }, ambas: { total: 0, LV: 0, SD: 0 } },
         parent2: { child1: { total: 0, LV: 0, SD: 0 }, child2: { total: 0, LV: 0, SD: 0 }, ambas: { total: 0, LV: 0, SD: 0 } },
-        other: { child1: { total: 0, LV: 0, SD: 0 }, child2: { total: 0, LV: 0, SD: 0 }, ambas: { total: 0, LV: 0, SD: 0 } }
+        other: { child1: { total: 0, LV: 0, SD: 0 }, child2: { total: 0, LV: 0, SD: 0 }, ambas: { total: 0, LV: 0, SD: 0 } },
+        // Nuevas categorías especiales
+        parent1_decision: { child1: { total: 0, LV: 0, SD: 0 }, child2: { total: 0, LV: 0, SD: 0 }, ambas: { total: 0, LV: 0, SD: 0 } },
+        parent2_decision: { child1: { total: 0, LV: 0, SD: 0 }, child2: { total: 0, LV: 0, SD: 0 }, ambas: { total: 0, LV: 0, SD: 0 } },
+        parent2_pago: { child1: { total: 0, LV: 0, SD: 0 }, child2: { total: 0, LV: 0, SD: 0 }, ambas: { total: 0, LV: 0, SD: 0 } }
       };
 
-      Object.entries(schedule).forEach(([key, parentKey]) => {
-        if (!parentKey) return;
+      Object.entries(schedule).forEach(([key, assignedValue]) => {
+        if (!assignedValue) return;
         
         // key formato: "2024-12-09_child1_Mañana"
         const parts = key.split('_');
@@ -1499,16 +1589,26 @@ const CoParentingApp = () => {
         const dayOfWeek = date.getDay();
         const esFinDeSemana = dayOfWeek === 0 || dayOfWeek === 6; // Domingo o Sábado
         
-        if (stats[parentKey] && stats[parentKey][childKey]) {
-          stats[parentKey][childKey].total++;
-          stats[parentKey].ambas.total++;
+        // Determinar la categoría de estadísticas
+        let statsKey = assignedValue;
+        
+        // Verificar si es una asignación especial
+        if (assignedValue.includes('_decision_')) {
+          statsKey = assignedValue.startsWith('parent1') ? 'parent1_decision' : 'parent2_decision';
+        } else if (assignedValue.includes('_pago')) {
+          statsKey = 'parent2_pago';
+        }
+        
+        if (stats[statsKey] && stats[statsKey][childKey]) {
+          stats[statsKey][childKey].total++;
+          stats[statsKey].ambas.total++;
           
           if (esFinDeSemana) {
-            stats[parentKey][childKey].SD++;
-            stats[parentKey].ambas.SD++;
+            stats[statsKey][childKey].SD++;
+            stats[statsKey].ambas.SD++;
           } else {
-            stats[parentKey][childKey].LV++;
-            stats[parentKey].ambas.LV++;
+            stats[statsKey][childKey].LV++;
+            stats[statsKey].ambas.LV++;
           }
         }
       });
@@ -1636,12 +1736,20 @@ const CoParentingApp = () => {
     const TablaCuidador = ({ parentKey, nombre, color, mesSeleccionado, setMesSeleccionado }) => {
       const stats = calcularEstadisticas(mesSeleccionado);
       const data = stats[parentKey];
+      
+      // No mostrar tabla si no hay datos (para las categorías especiales)
+      if (!data || data.ambas.total === 0) return null;
+      
       const child1Name = children.child1 || 'Hija 1';
       const child2Name = children.child2 || 'Hija 2';
       
+      // Determinar si el color de texto debe ser especial
+      const textColor = color === '#86efac' ? '#065f46' : (color === '#000000' ? '#000000' : color);
+      const bgColor = color === '#000000' ? '#00000020' : (color === '#dc2626' ? '#dc262620' : color + '40');
+      
       return (
         <div className="mb-4">
-          <div className="font-bold text-sm mb-2 p-2 rounded flex items-center justify-between" style={{ backgroundColor: color + '40', color: color === '#86efac' ? '#065f46' : color }}>
+          <div className="font-bold text-sm mb-2 p-2 rounded flex items-center justify-between" style={{ backgroundColor: bgColor, color: textColor }}>
             <span>{nombre}</span>
             <SelectorPeriodo valor={mesSeleccionado} onChange={setMesSeleccionado} />
           </div>
@@ -1685,11 +1793,19 @@ const CoParentingApp = () => {
       const totalParent1 = stats.parent1.ambas.total;
       const totalParent2 = stats.parent2.ambas.total;
       const totalOther = stats.other.ambas.total;
-      const granTotal = totalParent1 + totalParent2 + totalOther;
+      // Nuevas categorías
+      const totalParent1Decision = stats.parent1_decision.ambas.total;
+      const totalParent2Decision = stats.parent2_decision.ambas.total;
+      const totalParent2Pago = stats.parent2_pago.ambas.total;
+      
+      const granTotal = totalParent1 + totalParent2 + totalOther + totalParent1Decision + totalParent2Decision + totalParent2Pago;
       
       const pctParent1 = granTotal > 0 ? ((totalParent1 / granTotal) * 100).toFixed(1) : 0;
       const pctParent2 = granTotal > 0 ? ((totalParent2 / granTotal) * 100).toFixed(1) : 0;
       const pctOther = granTotal > 0 ? ((totalOther / granTotal) * 100).toFixed(1) : 0;
+      const pctParent1Decision = granTotal > 0 ? ((totalParent1Decision / granTotal) * 100).toFixed(1) : 0;
+      const pctParent2Decision = granTotal > 0 ? ((totalParent2Decision / granTotal) * 100).toFixed(1) : 0;
+      const pctParent2Pago = granTotal > 0 ? ((totalParent2Pago / granTotal) * 100).toFixed(1) : 0;
 
       // Calcular horas trabajadas
       const { horasPadre, horasMadre } = calcularHorasTrabajadas(mesSeleccionadoResumen);
@@ -1737,6 +1853,42 @@ const CoParentingApp = () => {
                 </div>
               </div>
             )}
+            {/* Barra Jose Luis por decisión */}
+            {totalParent1Decision > 0 && (
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span style={{ color: '#000000' }}>{parents.parent1} por decisión</span>
+                  <span className="font-bold">{totalParent1Decision} franjas ({pctParent1Decision}%)</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded h-3">
+                  <div className="h-3 rounded" style={{ width: `${pctParent1Decision}%`, backgroundColor: '#000000' }}></div>
+                </div>
+              </div>
+            )}
+            {/* Barra Irene por decisión */}
+            {totalParent2Decision > 0 && (
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span style={{ color: '#000000' }}>{parents.parent2} por decisión</span>
+                  <span className="font-bold">{totalParent2Decision} franjas ({pctParent2Decision}%)</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded h-3">
+                  <div className="h-3 rounded" style={{ width: `${pctParent2Decision}%`, backgroundColor: '#000000' }}></div>
+                </div>
+              </div>
+            )}
+            {/* Barra Irene por pago */}
+            {totalParent2Pago > 0 && (
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span style={{ color: '#dc2626' }}>{parents.parent2} por pago</span>
+                  <span className="font-bold">{totalParent2Pago} franjas ({pctParent2Pago}%)</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded h-3">
+                  <div className="h-3 rounded" style={{ width: `${pctParent2Pago}%`, backgroundColor: '#dc2626' }}></div>
+                </div>
+              </div>
+            )}
           </div>
           <div className="text-xs text-gray-500 mt-2 text-right">
             Total: {granTotal} franjas registradas
@@ -1759,10 +1911,37 @@ const CoParentingApp = () => {
           setMesSeleccionado={setMesSeleccionadoPadre}
         />
         
+        {/* Tabla Jose Luis por decisión */}
+        <TablaCuidador 
+          parentKey="parent1_decision" 
+          nombre={`${parents.parent1 || 'Padre'} por decisión niña u otro`} 
+          color="#000000"
+          mesSeleccionado={mesSeleccionadoPadre}
+          setMesSeleccionado={setMesSeleccionadoPadre}
+        />
+        
         <TablaCuidador 
           parentKey="parent2" 
           nombre={parents.parent2 || 'Madre'} 
           color={colors.parent2}
+          mesSeleccionado={mesSeleccionadoMadre}
+          setMesSeleccionado={setMesSeleccionadoMadre}
+        />
+        
+        {/* Tabla Irene por decisión */}
+        <TablaCuidador 
+          parentKey="parent2_decision" 
+          nombre={`${parents.parent2 || 'Madre'} por decisión niña u otro`} 
+          color="#000000"
+          mesSeleccionado={mesSeleccionadoMadre}
+          setMesSeleccionado={setMesSeleccionadoMadre}
+        />
+        
+        {/* Tabla Irene por pago */}
+        <TablaCuidador 
+          parentKey="parent2_pago" 
+          nombre={`${parents.parent2 || 'Madre'} por pago`} 
+          color="#dc2626"
           mesSeleccionado={mesSeleccionadoMadre}
           setMesSeleccionado={setMesSeleccionadoMadre}
         />
@@ -2307,21 +2486,41 @@ const CoParentingApp = () => {
                       const c1Assigned = schedule[c1k];
                       const c2Assigned = schedule[c2k];
 
+                      // Verificar si es una asignación especial para child1
+                      const c1IsDecision = c1Assigned?.includes('_decision_');
+                      const c1IsPago = c1Assigned?.includes('_pago');
+                      
+                      // Verificar si es una asignación especial para child2
+                      const c2IsDecision = c2Assigned?.includes('_decision_');
+                      const c2IsPago = c2Assigned?.includes('_pago');
+                      
+                      // Función para obtener color considerando las categorías especiales
+                      const getColorWithSpecial = (assigned, isDecision, isPago) => {
+                        if (isDecision) return '#000000';
+                        if (isPago) return '#dc2626';
+                        return getColorForAssigned(assigned);
+                      };
+                      
+                      const getTextColorWithSpecial = (assigned, isDecision, isPago) => {
+                        if (isDecision || isPago) return 'white';
+                        return assigned === 'parent1' ? 'white' : 'black';
+                      };
+
                       return (
                         <div key={`${dateKey}_${period}_global`} className="flex gap-0.5 flex-1">
                           {/* Columna hija 1 */}
                           <div className="flex-1 flex items-center justify-center rounded text-[7px] font-bold"
                             style={{ 
-                              backgroundColor: c1Assigned ? getColorForAssigned(c1Assigned) : '#f3f4f6',
-                              color: c1Assigned === 'parent1' ? 'white' : 'black'
+                              backgroundColor: c1Assigned ? getColorWithSpecial(c1Assigned, c1IsDecision, c1IsPago) : '#f3f4f6',
+                              color: c1Assigned ? getTextColorWithSpecial(c1Assigned, c1IsDecision, c1IsPago) : 'black'
                             }}>
                             {c1Assigned ? inicialChild1 : '-'}
                           </div>
                           {/* Columna hija 2 */}
                           <div className="flex-1 flex items-center justify-center rounded text-[7px] font-bold"
                             style={{ 
-                              backgroundColor: c2Assigned ? getColorForAssigned(c2Assigned) : '#f3f4f6',
-                              color: c2Assigned === 'parent1' ? 'white' : 'black'
+                              backgroundColor: c2Assigned ? getColorWithSpecial(c2Assigned, c2IsDecision, c2IsPago) : '#f3f4f6',
+                              color: c2Assigned ? getTextColorWithSpecial(c2Assigned, c2IsDecision, c2IsPago) : 'black'
                             }}>
                             {c2Assigned ? inicialChild2 : '-'}
                           </div>
@@ -2345,12 +2544,20 @@ const CoParentingApp = () => {
                         'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const dayLetters = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
     
-    // Colores para el calendario anual: Azul padre, Amarillo madre, Rosa otro
+    // Colores para el calendario anual: Azul padre (más transparente), Amarillo madre, Rosa otro
     const getColorForAssigned = (assigned) => {
-      if (assigned === 'parent1') return '#3b82f6'; // Azul para padre
+      if (assigned === 'parent1') return 'rgba(59, 130, 246, 0.5)'; // Azul más transparente para padre
       if (assigned === 'parent2') return '#FBBF24'; // Amarillo para madre
       if (assigned === 'other') return '#f472b6'; // Rosa
       return '#e5e7eb'; // Gris
+    };
+    
+    // Colores especiales para decisión y pago
+    const getColorWithSpecial = (assigned) => {
+      if (!assigned) return '#f3f4f6';
+      if (assigned.includes('_decision_')) return '#000000'; // Negro para decisión
+      if (assigned.includes('_pago')) return '#dc2626'; // Rojo para pago
+      return getColorForAssigned(assigned);
     };
 
     // Obtener días del mes para el año
@@ -2384,9 +2591,9 @@ const CoParentingApp = () => {
         </div>
         
         {/* Leyenda */}
-        <div className="flex justify-center gap-3 mb-2 text-[10px]">
+        <div className="flex flex-wrap justify-center gap-2 mb-2 text-[9px]">
           <span className="flex items-center gap-1">
-            <span style={{ backgroundColor: '#3b82f6', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
+            <span style={{ backgroundColor: 'rgba(59, 130, 246, 0.5)', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
             {parents.parent1 || 'Padre'}
           </span>
           <span className="flex items-center gap-1">
@@ -2399,6 +2606,14 @@ const CoParentingApp = () => {
               {parents.other}
             </span>
           )}
+          <span className="flex items-center gap-1">
+            <span style={{ backgroundColor: '#000000', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
+            Decisión
+          </span>
+          <span className="flex items-center gap-1">
+            <span style={{ backgroundColor: '#dc2626', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
+            Pago
+          </span>
         </div>
         
         {/* Grid de 12 meses (4 filas x 3 columnas) */}
@@ -2423,15 +2638,23 @@ const CoParentingApp = () => {
                   {/* Días del mes */}
                   <div className="grid grid-cols-7 gap-0.5">
                     {monthDates.map((date, idx) => {
-                      if (!date) return <div key={`empty-${monthIdx}-${idx}`} style={{ height: 24 }} />;
+                      if (!date) return <div key={`empty-${monthIdx}-${idx}`} style={{ height: 28 }} />;
                       
-                      // Obtener asignaciones para las 3 franjas (usamos child1 como referencia)
-                      const mKey = getScheduleKey(date, 'child1', 'Mañana');
-                      const tKey = getScheduleKey(date, 'child1', 'Tarde');
-                      const nKey = getScheduleKey(date, 'child1', 'Noche');
-                      const mAssigned = schedule[mKey];
-                      const tAssigned = schedule[tKey];
-                      const nAssigned = schedule[nKey];
+                      // Obtener asignaciones para las 6 combinaciones (Denia y Elsa x Mañana, Tarde, Noche)
+                      // child1 = Denia (izquierda), child2 = Elsa (derecha)
+                      const mKeyD = getScheduleKey(date, 'child1', 'Mañana');
+                      const tKeyD = getScheduleKey(date, 'child1', 'Tarde');
+                      const nKeyD = getScheduleKey(date, 'child1', 'Noche');
+                      const mKeyE = getScheduleKey(date, 'child2', 'Mañana');
+                      const tKeyE = getScheduleKey(date, 'child2', 'Tarde');
+                      const nKeyE = getScheduleKey(date, 'child2', 'Noche');
+                      
+                      const mAssignedD = schedule[mKeyD];
+                      const tAssignedD = schedule[tKeyD];
+                      const nAssignedD = schedule[nKeyD];
+                      const mAssignedE = schedule[mKeyE];
+                      const tAssignedE = schedule[tKeyE];
+                      const nAssignedE = schedule[nKeyE];
                       
                       // Obtener turno de trabajo
                       const turnoKey = getTurnoKey(date);
@@ -2441,14 +2664,11 @@ const CoParentingApp = () => {
                       const today = isToday(date);
                       const redDay = isRedDay(date);
                       
-                      // Verificar si las 3 franjas son del mismo padre
-                      const allSame = mAssigned === tAssigned && tAssigned === nAssigned;
-                      
                       return (
                         <div key={`${monthIdx}-${date.getDate()}`} 
                           className="rounded-sm flex flex-col overflow-hidden"
                           style={{ 
-                            height: 24,
+                            height: 28,
                             border: today ? '2px solid black' : '1px solid #e5e7eb'
                           }}>
                           {/* Fila superior: número del día */}
@@ -2456,25 +2676,29 @@ const CoParentingApp = () => {
                             style={{ color: redDay ? '#dc2626' : '#666' }}>
                             {date.getDate()}
                           </div>
-                          {/* 3 franjas horizontales: Mañana, Tarde, Noche */}
+                          {/* 6 rectángulos: 3 filas x 2 columnas */}
+                          {/* Izquierda = Denia (child1), Derecha = Elsa (child2) */}
+                          {/* Arriba = Mañana, Medio = Tarde, Abajo = Noche */}
                           <div className="flex-1 flex flex-col relative">
-                            {allSame ? (
-                              <div className="flex-1" 
-                                style={{ backgroundColor: mAssigned ? getColorForAssigned(mAssigned) : '#f3f4f6' }} />
-                            ) : (
-                              <>
-                                <div className="flex-1" 
-                                  style={{ backgroundColor: mAssigned ? getColorForAssigned(mAssigned) : '#f3f4f6' }} />
-                                <div className="flex-1" 
-                                  style={{ backgroundColor: tAssigned ? getColorForAssigned(tAssigned) : '#f3f4f6' }} />
-                                <div className="flex-1" 
-                                  style={{ backgroundColor: nAssigned ? getColorForAssigned(nAssigned) : '#f3f4f6' }} />
-                              </>
-                            )}
+                            {/* Fila Mañana */}
+                            <div className="flex-1 flex">
+                              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(mAssignedD) }} />
+                              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(mAssignedE) }} />
+                            </div>
+                            {/* Fila Tarde */}
+                            <div className="flex-1 flex">
+                              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(tAssignedD) }} />
+                              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(tAssignedE) }} />
+                            </div>
+                            {/* Fila Noche */}
+                            <div className="flex-1 flex">
+                              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedD) }} />
+                              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedE) }} />
+                            </div>
                             {/* Turno del padre centrado */}
                             {turnoCorto && (
                               <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="text-[4px] font-bold text-black">{turnoCorto}</span>
+                                <span className="text-[4px] font-bold text-black bg-white/70 px-0.5 rounded">{turnoCorto}</span>
                               </div>
                             )}
                           </div>
