@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+iimport React, { useState, useCallback, useEffect } from 'react';
 import { Calendar, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import SetupScreen from './SetupScreen';
 import { supabase } from './supabaseClient.js';
@@ -180,11 +180,30 @@ const CoParentingApp = () => {
       padresData?.forEach(p => { padresMap[p.nombre] = p.id; });
       hijasData?.forEach(h => { hijasMap[h.nombre] = h.id; });
       
-      const padreNombre = parents[parentKey];
+      // Traducir parentKey a nombre del padre (incluyendo categorías especiales)
+      let padreNombre;
+      if (parentKey === 'parent1') {
+        padreNombre = parents.parent1;
+      } else if (parentKey === 'parent2') {
+        padreNombre = parents.parent2;
+      } else if (parentKey === 'other') {
+        padreNombre = parents.other;
+      } else if (parentKey?.includes('_decision_')) {
+        // Categorías especiales de decisión
+        if (parentKey.startsWith('parent1')) {
+          padreNombre = 'Jose Luis por decisión niña u otro';
+        } else {
+          padreNombre = 'Irene por decisión niña u otro';
+        }
+      } else if (parentKey?.includes('_pago')) {
+        // Categoría de pago
+        padreNombre = 'Irene por pago';
+      }
+      
       const hijaNombre = children[childKey];
       
       if (!padreNombre || !hijaNombre) {
-        console.log('saveOneAsignacion: Falta padre o hija', { parentKey, childKey });
+        console.log('saveOneAsignacion: Falta padre o hija', { parentKey, childKey, padreNombre });
         return;
       }
       
@@ -192,7 +211,7 @@ const CoParentingApp = () => {
       const hijaId = hijasMap[hijaNombre];
       
       if (!padreId || !hijaId) {
-        console.log('saveOneAsignacion: No se encontró ID', { padreNombre, hijaNombre });
+        console.log('saveOneAsignacion: No se encontró ID', { padreNombre, hijaNombre, padreId, hijaId });
         return;
       }
       
@@ -217,7 +236,7 @@ const CoParentingApp = () => {
         }
       }
       
-      console.log('Asignación guardada:', { fecha, childKey, periodo, parentKey });
+      console.log('Asignación guardada:', { fecha, childKey, periodo, parentKey, padreNombre });
       setLastSaveStatus('success');
       setTimeout(() => setLastSaveStatus(null), 2000);
       
@@ -407,10 +426,25 @@ const CoParentingApp = () => {
             return;
           }
           
+          // Determinar parentKey incluyendo las categorías especiales
           let parentKey = null;
           if (parents.parent1 === padreNombre) parentKey = 'parent1';
           else if (parents.parent2 === padreNombre) parentKey = 'parent2';
           else if (parents.other === padreNombre) parentKey = 'other';
+          // Categorías especiales
+          else if (padreNombre === 'Irene por decisión niña u otro') {
+            // Necesitamos saber qué hija es para asignar el parentKey correcto
+            const childKeyTemp = children.child1 === hijaNombre ? 'child1' : 'child2';
+            parentKey = `parent2_decision_${childKeyTemp}`;
+          }
+          else if (padreNombre === 'Jose Luis por decisión niña u otro') {
+            const childKeyTemp = children.child1 === hijaNombre ? 'child1' : 'child2';
+            parentKey = `parent1_decision_${childKeyTemp}`;
+          }
+          else if (padreNombre === 'Irene por pago') {
+            const childKeyTemp = children.child1 === hijaNombre ? 'child1' : 'child2';
+            parentKey = `parent2_pago_${childKeyTemp}`;
+          }
           
           let childKey = null;
           if (children.child1 === hijaNombre) childKey = 'child1';
@@ -2578,6 +2612,28 @@ const CoParentingApp = () => {
       const codigo = turnoStr.split(' ')[0].split('(')[0];
       return codigo;
     };
+    
+    // Obtener actividad del padre con formato corto
+    const getActividadInfo = (actividadStr) => {
+      if (!actividadStr) return null;
+      const parsed = parseActividadPadre(actividadStr);
+      if (!parsed.tipo) return null;
+      
+      // Abreviar el tipo de actividad
+      let tipoCorto = '';
+      if (parsed.tipo === 'CLASE MÁSTER') tipoCorto = 'MÁS';
+      else if (parsed.tipo === 'CURSO') tipoCorto = 'CUR';
+      else if (parsed.tipo === 'F.O.') tipoCorto = 'FO';
+      else if (parsed.tipo === 'VIAJE') tipoCorto = 'VIA';
+      else if (parsed.tipo === 'OTRO') tipoCorto = 'OTR';
+      else tipoCorto = parsed.tipo.substring(0, 3);
+      
+      return {
+        tipo: tipoCorto,
+        entrada: parsed.entrada || '',
+        salida: parsed.salida || ''
+      };
+    };
 
     return (
       <div className="p-2 h-full flex flex-col overflow-hidden">
@@ -2638,7 +2694,7 @@ const CoParentingApp = () => {
                   {/* Días del mes */}
                   <div className="grid grid-cols-7 gap-0.5">
                     {monthDates.map((date, idx) => {
-                      if (!date) return <div key={`empty-${monthIdx}-${idx}`} style={{ height: 28 }} />;
+                      if (!date) return <div key={`empty-${monthIdx}-${idx}`} style={{ height: 32 }} />;
                       
                       // Obtener asignaciones para las 6 combinaciones (Denia y Elsa x Mañana, Tarde, Noche)
                       // child1 = Denia (izquierda), child2 = Elsa (derecha)
@@ -2656,19 +2712,24 @@ const CoParentingApp = () => {
                       const tAssignedE = schedule[tKeyE];
                       const nAssignedE = schedule[nKeyE];
                       
-                      // Obtener turno de trabajo
+                      // Obtener turno de trabajo y actividad
                       const turnoKey = getTurnoKey(date);
                       const turnoPadre = turnos[`${turnoKey}_padre`] || '';
+                      const actividadPadre = turnos[`${turnoKey}_padre_actividad`] || '';
                       const turnoCorto = getTurnoCorto(turnoPadre);
+                      const actividadInfo = getActividadInfo(actividadPadre);
                       
                       const today = isToday(date);
                       const redDay = isRedDay(date);
+                      
+                      // Determinar si hay turno o actividad para mostrar
+                      const hayTurno = turnoCorto || actividadInfo;
                       
                       return (
                         <div key={`${monthIdx}-${date.getDate()}`} 
                           className="rounded-sm flex flex-col overflow-hidden"
                           style={{ 
-                            height: 28,
+                            height: 32,
                             border: today ? '2px solid black' : '1px solid #e5e7eb'
                           }}>
                           {/* Fila superior: número del día */}
@@ -2695,10 +2756,34 @@ const CoParentingApp = () => {
                               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedD) }} />
                               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedE) }} />
                             </div>
-                            {/* Turno del padre centrado */}
-                            {turnoCorto && (
+                            {/* Turno y/o Actividad del padre centrado */}
+                            {hayTurno && (
                               <div className="absolute inset-0 flex items-center justify-center">
-                                <span className="text-[4px] font-bold text-black bg-white/70 px-0.5 rounded">{turnoCorto}</span>
+                                <div className="bg-white/80 px-0.5 rounded flex flex-col items-center" style={{ lineHeight: 1 }}>
+                                  {/* Turno de trabajo */}
+                                  {turnoCorto && (
+                                    <span className="text-[4px] font-bold text-black">{turnoCorto}</span>
+                                  )}
+                                  {/* Actividad (MÁSTER, CURSO, etc.) */}
+                                  {actividadInfo && (
+                                    <>
+                                      <span className="text-[3px] font-bold" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
+                                      {(actividadInfo.entrada || actividadInfo.salida) && (
+                                        <span className="text-[3px]" style={{ color: '#9333ea' }}>
+                                          {actividadInfo.entrada && actividadInfo.salida 
+                                            ? `${actividadInfo.entrada}-${actividadInfo.salida}`
+                                            : (
+                                              <>
+                                                {actividadInfo.entrada && <span>{actividadInfo.entrada}</span>}
+                                                {actividadInfo.salida && <span>{actividadInfo.salida}</span>}
+                                              </>
+                                            )
+                                          }
+                                        </span>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
