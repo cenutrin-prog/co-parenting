@@ -509,93 +509,16 @@ const CoParentingApp = () => {
   }, [step, parents.parent1, children.child1, loadScheduleFromSupabase]);
 
   const saveScheduleInSupabase = async () => {
-    // Sincronización completa de todos los datos
+    // Ahora solo recarga los datos desde Supabase para verificar sincronización
+    // (Las asignaciones ya se guardan automáticamente con saveOneAsignacion)
     setIsSaving(true);
     try {
-      // Obtener mapas de IDs
-      const { data: padresData } = await supabase.from('padres').select('id, nombre');
-      const { data: hijasData } = await supabase.from('hijas').select('id, nombre');
-      const padresMap = {}; const hijasMap = {};
-      padresData?.forEach(p => { padresMap[p.nombre] = p.id; });
-      hijasData?.forEach(h => { hijasMap[h.nombre] = h.id; });
-      
-      // Preparar asignaciones
-      const keys = Object.keys(schedule).filter(k => schedule[k]);
-      console.log('Sincronización completa - Asignaciones:', keys.length);
-      
-      const asignacionesPorFecha = {};
-      for (const k of keys) {
-        const parts = k.split('_'); 
-        if (parts.length < 3) continue;
-        const fecha = parts[0]; 
-        const childKey = parts[1]; 
-        const periodo = parts.slice(2).join('_');
-        const parentKey = schedule[k]; 
-        const padreNombre = parents[parentKey]; 
-        const hijaNombre = children[childKey];
-        
-        if (!padreNombre || !hijaNombre) continue;
-        
-        const padreId = padresMap[padreNombre]; 
-        const hijaId = hijasMap[hijaNombre];
-        
-        if (!padreId || !hijaId) continue;
-        
-        if (!asignacionesPorFecha[fecha]) asignacionesPorFecha[fecha] = [];
-        asignacionesPorFecha[fecha].push({ padre_id: padreId, hija_id: hijaId, fecha, periodo, observaciones: notes[k] || null });
-      }
-      
-      // Guardar asignaciones fecha por fecha (borrar + insertar)
-      for (const [fecha, asignaciones] of Object.entries(asignacionesPorFecha)) {
-        await supabase.from('asignaciones').delete().eq('fecha', fecha);
-        if (asignaciones.length > 0) {
-          const { error } = await supabase.from('asignaciones').insert(asignaciones);
-          if (error) {
-            console.error('Error insertando asignaciones para', fecha, error);
-          }
-        }
-      }
-      
-      // Preparar turnos
-      const turnoKeys = Object.keys(turnos).filter(k => turnos[k]);
-      const turnosPorFecha = {};
-      turnoKeys.forEach(k => {
-        const parts = k.split('_'); 
-        const fecha = parts[0]; 
-        const quien = parts.slice(1).join('_');
-        if (!turnosPorFecha[fecha]) turnosPorFecha[fecha] = { turno_padre: null, turno_madre: null, actividad_padre: null };
-        if (quien === 'padre') turnosPorFecha[fecha].turno_padre = turnos[k];
-        if (quien === 'madre') turnosPorFecha[fecha].turno_madre = turnos[k];
-        if (quien === 'padre_actividad') turnosPorFecha[fecha].actividad_padre = turnos[k];
-      });
-      
-      // Guardar turnos fecha por fecha (borrar + insertar)
-      for (const [fecha, data] of Object.entries(turnosPorFecha)) {
-        let turnoPadreCompleto = data.turno_padre || '';
-        if (data.actividad_padre) {
-          turnoPadreCompleto = turnoPadreCompleto ? `${turnoPadreCompleto}||${data.actividad_padre}` : `||${data.actividad_padre}`;
-        }
-        
-        await supabase.from('turnos').delete().eq('fecha', fecha);
-        
-        if (turnoPadreCompleto || data.turno_madre) {
-          const { error } = await supabase.from('turnos').insert({
-            fecha,
-            turno_padre: turnoPadreCompleto || null,
-            turno_madre: data.turno_madre || null
-          });
-          if (error) {
-            console.error('Error insertando turno para', fecha, error);
-          }
-        }
-      }
-      
+      await loadScheduleFromSupabase();
       setIsSaving(false);
       setLastSaveStatus('success');
-      setTimeout(() => setLastSaveStatus(null), 3000);
-      
+      setTimeout(() => setLastSaveStatus(null), 2000);
     } catch (err) { 
-      console.error('Error inesperado:', err);
+      console.error('Error al recargar:', err);
       setIsSaving(false);
       setLastSaveStatus('error');
     }
@@ -709,8 +632,8 @@ const CoParentingApp = () => {
               <div className="flex items-center gap-1 mb-1">
                 <button onClick={saveScheduleInSupabase} 
                   disabled={isSaving}
-                  className={`px-3 py-1 text-xs rounded font-bold ${isSaving ? 'bg-gray-400' : 'bg-blue-600'} text-white`}>
-                  {isSaving ? 'Sincronizando...' : 'Sincronizar'}
+                  className={`px-3 py-1 text-xs rounded font-bold ${isSaving ? 'bg-gray-400' : 'bg-green-600'} text-white`}>
+                  {isSaving ? 'Cargando...' : '↻ Recargar'}
                 </button>
                 {lastSaveStatus === 'success' && (
                   <span className="text-green-600 text-xs">✓</span>
@@ -2390,12 +2313,12 @@ const CoParentingApp = () => {
           </div>
         </div>
         
-        {/* Botón de sincronizar */}
+        {/* Botón de recargar */}
         <div className="mt-3">
           <button onClick={saveScheduleInSupabase} 
             disabled={isSaving}
-            className={`w-full py-2 rounded-lg text-sm font-bold ${isSaving ? 'bg-gray-300' : 'bg-blue-600 text-white'}`}>
-            {isSaving ? 'Sincronizando...' : (lastSaveStatus === 'success' ? '✓ Sincronizado' : (lastSaveStatus === 'error' ? '✗ Error' : '🔄 Sincronizar todo'))}
+            className={`w-full py-2 rounded-lg text-sm font-bold ${isSaving ? 'bg-gray-300' : 'bg-green-600 text-white'}`}>
+            {isSaving ? 'Cargando...' : (lastSaveStatus === 'success' ? '✓ Recargado' : (lastSaveStatus === 'error' ? '✗ Error' : '↻ Recargar datos'))}
           </button>
         </div>
       </div>
@@ -2727,7 +2650,8 @@ const CoParentingApp = () => {
                       
                       return (
                         <div key={`${monthIdx}-${date.getDate()}`} 
-                          className="rounded-sm flex flex-col overflow-hidden"
+                          className="rounded-sm flex flex-col overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400"
+                          onClick={() => { setCurrentDate(date); setCurrentView('daily'); }}
                           style={{ 
                             height: 32,
                             border: today ? '2px solid black' : '1px solid #e5e7eb'
