@@ -1131,15 +1131,10 @@ const CoParentingApp = () => {
 
   // VISTA MES - Con turnos mejorados (compacta sin scroll)
   const MonthView = () => {
-    const monthDates = getMonthDates(currentDate);
-    const monthLabel = currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
     const isChildUser = currentUser === 'child1' || currentUser === 'child2';
     const childName = isChildUser ? (children[currentUser] || 'Hijo').toUpperCase() : '';
     const childColor = isChildUser ? colors[currentUser] : '';
     const dayLetters = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-    
-    // Calcular número de filas del mes (semanas)
-    const numRows = Math.ceil(monthDates.length / 7);
 
     // Colores estilo calendario anual
     const getColorForAssigned = (assigned) => {
@@ -1177,57 +1172,183 @@ const CoParentingApp = () => {
       return { tipo: tipoCorto, entrada: parsed.entrada || '', salida: parsed.salida || '' };
     };
 
-    // Vista para hijos (simplificada)
+    // Generar semanas continuas (incluye días de meses anteriores/siguientes)
+    const generateContinuousWeeks = (centerDate, numWeeksBefore = 4, numWeeksAfter = 8) => {
+      const weeks = [];
+      
+      // Encontrar el lunes de la semana que contiene el primer día del mes actual
+      const firstOfMonth = new Date(centerDate.getFullYear(), centerDate.getMonth(), 1);
+      const firstDayOfWeek = firstOfMonth.getDay();
+      const mondayOfFirstWeek = new Date(firstOfMonth);
+      mondayOfFirstWeek.setDate(firstOfMonth.getDate() - (firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1));
+      
+      // Retroceder numWeeksBefore semanas
+      const startMonday = new Date(mondayOfFirstWeek);
+      startMonday.setDate(startMonday.getDate() - (numWeeksBefore * 7));
+      
+      // Generar todas las semanas
+      const totalWeeks = numWeeksBefore + numWeeksAfter + 6; // 6 semanas típicas de un mes
+      let currentMonday = new Date(startMonday);
+      
+      for (let w = 0; w < totalWeeks; w++) {
+        const week = [];
+        for (let d = 0; d < 7; d++) {
+          const date = new Date(currentMonday);
+          date.setDate(currentMonday.getDate() + d);
+          week.push(date);
+        }
+        weeks.push(week);
+        currentMonday.setDate(currentMonday.getDate() + 7);
+      }
+      
+      return weeks;
+    };
+
+    const weeks = generateContinuousWeeks(currentDate);
+
+    // Detectar cambio de mes para mostrar separador
+    const getMonthLabel = (date) => {
+      return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    };
+
+    // Renderizar un día
+    const renderDay = (date, isChild = false) => {
+      const today = isToday(date);
+      const redDay = isRedDay(date);
+      const dateKey = formatDate(date);
+      const isCurrentMonth = date.getMonth() === currentDate.getMonth();
+      
+      if (isChild) {
+        const ck_m = getScheduleKey(date, currentUser, 'Mañana');
+        const ck_t = getScheduleKey(date, currentUser, 'Tarde');
+        const ck_n = getScheduleKey(date, currentUser, 'Noche');
+        
+        return (
+          <div key={dateKey} 
+            className="rounded flex flex-col overflow-hidden cursor-pointer"
+            onClick={() => { setCurrentDate(date); setCurrentView('daily'); }}
+            style={{ 
+              border: today ? '2px solid black' : '1px solid #e5e7eb',
+              opacity: isCurrentMonth ? 1 : 0.4,
+              minHeight: 60
+            }}>
+            <div className="text-[9px] text-center font-bold bg-white"
+              style={{ color: redDay ? '#dc2626' : '#666' }}>
+              {date.getDate()}
+            </div>
+            <div className="flex-1 flex flex-col">
+              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(schedule[ck_m]) }} />
+              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(schedule[ck_t]) }} />
+              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(schedule[ck_n]) }} />
+            </div>
+          </div>
+        );
+      }
+
+      // Vista para padres
+      const mKeyD = getScheduleKey(date, 'child1', 'Mañana');
+      const tKeyD = getScheduleKey(date, 'child1', 'Tarde');
+      const nKeyD = getScheduleKey(date, 'child1', 'Noche');
+      const mKeyE = getScheduleKey(date, 'child2', 'Mañana');
+      const tKeyE = getScheduleKey(date, 'child2', 'Tarde');
+      const nKeyE = getScheduleKey(date, 'child2', 'Noche');
+      
+      const mAssignedD = schedule[mKeyD];
+      const tAssignedD = schedule[tKeyD];
+      const nAssignedD = schedule[nKeyD];
+      const mAssignedE = schedule[mKeyE];
+      const tAssignedE = schedule[tKeyE];
+      const nAssignedE = schedule[nKeyE];
+      
+      const turnoKey = getTurnoKey(date);
+      const turnoPadre = turnos[`${turnoKey}_padre`] || '';
+      const actividadPadre = turnos[`${turnoKey}_padre_actividad`] || '';
+      const turnoCorto = getTurnoCorto(turnoPadre);
+      const actividadInfo = getActividadInfo(actividadPadre);
+      const hayTurnoOActividad = turnoCorto || actividadInfo;
+      
+      return (
+        <div key={dateKey} 
+          className="rounded flex flex-col overflow-hidden cursor-pointer"
+          onClick={() => { setCurrentDate(date); setCurrentView('daily'); }}
+          style={{ 
+            border: today ? '2px solid black' : '1px solid #e5e7eb',
+            opacity: isCurrentMonth ? 1 : 0.4,
+            minHeight: 60
+          }}>
+          <div className="text-[9px] text-center font-bold bg-white"
+            style={{ color: redDay ? '#dc2626' : '#666' }}>
+            {date.getDate()}
+          </div>
+          
+          <div className="flex-1 flex flex-col relative">
+            <div className="flex-1 flex">
+              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(mAssignedD) }} />
+              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(mAssignedE) }} />
+            </div>
+            <div className="flex-1 flex">
+              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(tAssignedD) }} />
+              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(tAssignedE) }} />
+            </div>
+            <div className="flex-1 flex">
+              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedD) }} />
+              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedE) }} />
+            </div>
+            
+            {hayTurnoOActividad && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ lineHeight: 1.1 }}>
+                {turnoCorto && (
+                  <span className="text-[10px] font-black text-black bg-white/90 px-0.5 rounded leading-tight">{turnoCorto}</span>
+                )}
+                {actividadInfo && (
+                  <span className="text-[8px] font-bold bg-white/90 px-0.5 rounded leading-tight" style={{ color: '#9333ea' }}>
+                    {actividadInfo.tipo}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    // Vista para hijos
     if (isChildUser) {
       return (
-        <div className="p-1 h-full flex flex-col overflow-hidden">
-          {/* Cabecera */}
-          <div className="flex items-center justify-between mb-1">
-            <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={20} /></button>
-            <div className="text-sm font-bold">
-              <span style={{ color: childColor }}>{childName}</span> - {capitalize(monthLabel)}
+        <div className="h-full flex flex-col overflow-hidden">
+          {/* Cabecera fija */}
+          <div className="p-1 bg-white border-b">
+            <div className="flex items-center justify-between mb-1">
+              <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={20} /></button>
+              <div className="text-sm font-bold">
+                <span style={{ color: childColor }}>{childName}</span> - {capitalize(getMonthLabel(currentDate))}
+              </div>
+              <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={20} /></button>
             </div>
-            <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={20} /></button>
+            <div className="grid grid-cols-7 gap-0.5">
+              {dayLetters.map((d, i) => (
+                <div key={d} className="text-[10px] text-center font-bold"
+                  style={{ color: i >= 5 ? '#dc2626' : '#888' }}>{d}</div>
+              ))}
+            </div>
           </div>
           
-          {/* Días de la semana */}
-          <div className="grid grid-cols-7 gap-0.5 mb-1">
-            {dayLetters.map((d, i) => (
-              <div key={d} className="text-[10px] text-center font-bold"
-                style={{ color: i >= 5 ? '#dc2626' : '#888' }}>{d}</div>
-            ))}
-          </div>
-          
-          {/* Días del mes */}
-          <div className="flex-1 grid grid-cols-7 gap-0.5" style={{ gridTemplateRows: `repeat(${numRows}, 1fr)` }}>
-            {monthDates.map((date, idx) => {
-              if (!date) return <div key={`empty-${idx}`} className="bg-gray-50 rounded" />;
-              
-              const today = isToday(date);
-              const redDay = isRedDay(date);
-              const dateKey = formatDate(date);
+          {/* Calendario scrollable */}
+          <div className="flex-1 overflow-y-auto p-1">
+            {weeks.map((week, weekIdx) => {
+              const firstDayOfWeek = week[0];
+              const showMonthHeader = firstDayOfWeek.getDate() <= 7 && firstDayOfWeek.getDate() > 0;
+              const monthLabel = showMonthHeader ? getMonthLabel(firstDayOfWeek) : null;
               
               return (
-                <div key={dateKey} 
-                  className="rounded flex flex-col overflow-hidden cursor-pointer"
-                  onClick={() => { setCurrentDate(date); setCurrentView('daily'); }}
-                  style={{ border: today ? '2px solid black' : '1px solid #e5e7eb' }}>
-                  {/* Número del día */}
-                  <div className="text-[9px] text-center font-bold bg-white"
-                    style={{ color: redDay ? '#dc2626' : '#666' }}>
-                    {date.getDate()}
-                  </div>
-                  {/* Franjas */}
-                  <div className="flex-1 flex flex-col">
-                    {periods.map((period) => {
-                      const ck = getScheduleKey(date, currentUser, period);
-                      const assigned = schedule[ck];
-                      return (
-                        <div key={`${dateKey}_${period}`} 
-                          className="flex-1"
-                          style={{ backgroundColor: getColorWithSpecial(assigned) }} />
-                      );
-                    })}
+                <div key={weekIdx}>
+                  {monthLabel && weekIdx > 0 && (
+                    <div className="text-center text-xs font-bold text-gray-600 py-1 bg-gray-100 rounded my-1">
+                      {capitalize(monthLabel)}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+                    {week.map(date => renderDay(date, true))}
                   </div>
                 </div>
               );
@@ -1237,126 +1358,68 @@ const CoParentingApp = () => {
       );
     }
 
-    // Vista para padres - estilo YearCalendar a pantalla completa
+    // Vista para padres - calendario continuo
     return (
-      <div className="p-1 h-full flex flex-col overflow-hidden">
-        {/* Cabecera con mes y navegación */}
-        <div className="flex items-center justify-between mb-1">
-          <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={20} /></button>
-          <div className="text-sm font-bold text-gray-700">{capitalize(monthLabel)}</div>
-          <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={20} /></button>
-        </div>
-        
-        {/* Leyenda */}
-        <div className="flex flex-wrap justify-center gap-2 mb-1 text-[8px]">
-          <span className="flex items-center gap-1">
-            <span style={{ backgroundColor: 'rgba(59, 130, 246, 0.5)', width: 10, height: 10, borderRadius: 2, display: 'inline-block' }}></span>
-            {parents.parent1 || 'Padre'}
-          </span>
-          <span className="flex items-center gap-1">
-            <span style={{ backgroundColor: '#FBBF24', width: 10, height: 10, borderRadius: 2, display: 'inline-block' }}></span>
-            {parents.parent2 || 'Madre'}
-          </span>
-          {parents.other && (
-            <span className="flex items-center gap-1">
-              <span style={{ backgroundColor: '#f472b6', width: 10, height: 10, borderRadius: 2, display: 'inline-block' }}></span>
-              {parents.other}
+      <div className="h-full flex flex-col overflow-hidden">
+        {/* Cabecera fija */}
+        <div className="p-1 bg-white border-b">
+          <div className="flex items-center justify-between mb-1">
+            <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={20} /></button>
+            <div className="text-sm font-bold text-gray-700">{capitalize(getMonthLabel(currentDate))}</div>
+            <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={20} /></button>
+          </div>
+          
+          {/* Leyenda */}
+          <div className="flex flex-wrap justify-center gap-1 mb-1 text-[7px]">
+            <span className="flex items-center gap-0.5">
+              <span style={{ backgroundColor: 'rgba(59, 130, 246, 0.5)', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
+              {parents.parent1 || 'Padre'}
             </span>
-          )}
-          <span className="flex items-center gap-1">
-            <span style={{ backgroundColor: '#000000', width: 10, height: 10, borderRadius: 2, display: 'inline-block' }}></span>
-            Decisión
-          </span>
-          <span className="flex items-center gap-1">
-            <span style={{ backgroundColor: '#dc2626', width: 10, height: 10, borderRadius: 2, display: 'inline-block' }}></span>
-            Pago
-          </span>
+            <span className="flex items-center gap-0.5">
+              <span style={{ backgroundColor: '#FBBF24', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
+              {parents.parent2 || 'Madre'}
+            </span>
+            {parents.other && (
+              <span className="flex items-center gap-0.5">
+                <span style={{ backgroundColor: '#f472b6', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
+                {parents.other}
+              </span>
+            )}
+            <span className="flex items-center gap-0.5">
+              <span style={{ backgroundColor: '#000000', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
+              Decisión
+            </span>
+            <span className="flex items-center gap-0.5">
+              <span style={{ backgroundColor: '#dc2626', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
+              Pago
+            </span>
+          </div>
+          
+          {/* Días de la semana */}
+          <div className="grid grid-cols-7 gap-0.5">
+            {dayLetters.map((d, i) => (
+              <div key={d} className="text-[10px] text-center font-bold"
+                style={{ color: i >= 5 ? '#dc2626' : '#888' }}>{d}</div>
+            ))}
+          </div>
         </div>
         
-        {/* Días de la semana */}
-        <div className="grid grid-cols-7 gap-0.5 mb-1">
-          {dayLetters.map((d, i) => (
-            <div key={d} className="text-[10px] text-center font-bold"
-              style={{ color: i >= 5 ? '#dc2626' : '#888' }}>{d}</div>
-          ))}
-        </div>
-        
-        {/* Días del mes - grid que ocupa todo el espacio disponible */}
-        <div className="flex-1 grid grid-cols-7 gap-0.5" style={{ gridTemplateRows: `repeat(${numRows}, 1fr)` }}>
-          {monthDates.map((date, idx) => {
-            if (!date) return <div key={`empty-${idx}`} className="bg-gray-50 rounded" />;
-            
-            const today = isToday(date);
-            const redDay = isRedDay(date);
-            const dateKey = formatDate(date);
-            
-            // Obtener asignaciones para las 6 combinaciones
-            const mKeyD = getScheduleKey(date, 'child1', 'Mañana');
-            const tKeyD = getScheduleKey(date, 'child1', 'Tarde');
-            const nKeyD = getScheduleKey(date, 'child1', 'Noche');
-            const mKeyE = getScheduleKey(date, 'child2', 'Mañana');
-            const tKeyE = getScheduleKey(date, 'child2', 'Tarde');
-            const nKeyE = getScheduleKey(date, 'child2', 'Noche');
-            
-            const mAssignedD = schedule[mKeyD];
-            const tAssignedD = schedule[tKeyD];
-            const nAssignedD = schedule[nKeyD];
-            const mAssignedE = schedule[mKeyE];
-            const tAssignedE = schedule[tKeyE];
-            const nAssignedE = schedule[nKeyE];
-            
-            // Obtener turno y actividad
-            const turnoKey = getTurnoKey(date);
-            const turnoPadre = turnos[`${turnoKey}_padre`] || '';
-            const actividadPadre = turnos[`${turnoKey}_padre_actividad`] || '';
-            const turnoCorto = getTurnoCorto(turnoPadre);
-            const actividadInfo = getActividadInfo(actividadPadre);
-            const hayTurnoOActividad = turnoCorto || actividadInfo;
+        {/* Calendario scrollable continuo */}
+        <div className="flex-1 overflow-y-auto p-1">
+          {weeks.map((week, weekIdx) => {
+            const firstDayOfWeek = week[0];
+            const showMonthHeader = firstDayOfWeek.getDate() <= 7 && firstDayOfWeek.getDate() > 0;
+            const monthLabel = showMonthHeader ? getMonthLabel(firstDayOfWeek) : null;
             
             return (
-              <div key={dateKey} 
-                className="rounded flex flex-col overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400"
-                onClick={() => { setCurrentDate(date); setCurrentView('daily'); }}
-                style={{ border: today ? '2px solid black' : '1px solid #e5e7eb' }}>
-                {/* Número del día */}
-                <div className="text-[9px] text-center font-bold bg-white"
-                  style={{ color: redDay ? '#dc2626' : '#666' }}>
-                  {date.getDate()}
-                </div>
-                
-                {/* 6 rectángulos: 3 filas x 2 columnas */}
-                <div className="flex-1 flex flex-col relative">
-                  {/* Fila Mañana */}
-                  <div className="flex-1 flex">
-                    <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(mAssignedD) }} />
-                    <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(mAssignedE) }} />
+              <div key={weekIdx}>
+                {monthLabel && weekIdx > 0 && (
+                  <div className="text-center text-xs font-bold text-gray-600 py-1 bg-gray-100 rounded my-1">
+                    {capitalize(monthLabel)}
                   </div>
-                  {/* Fila Tarde */}
-                  <div className="flex-1 flex">
-                    <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(tAssignedD) }} />
-                    <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(tAssignedE) }} />
-                  </div>
-                  {/* Fila Noche */}
-                  <div className="flex-1 flex">
-                    <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedD) }} />
-                    <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedE) }} />
-                  </div>
-                  
-                  {/* Turno y/o Actividad - en la parte superior (franja mañana) */}
-                  {hayTurnoOActividad && (
-                    <div className="absolute top-0 left-0 right-0 flex flex-col items-center justify-start pt-0.5" style={{ lineHeight: 1 }}>
-                      {/* Turno de trabajo */}
-                      {turnoCorto && (
-                        <span className="text-[7px] font-bold text-black bg-white/80 px-0.5 rounded">{turnoCorto}</span>
-                      )}
-                      {/* Actividad debajo del turno */}
-                      {actividadInfo && (
-                        <span className="text-[6px] font-bold bg-white/80 px-0.5 rounded" style={{ color: '#9333ea' }}>
-                          {actividadInfo.tipo}
-                        </span>
-                      )}
-                    </div>
-                  )}
+                )}
+                <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+                  {week.map(date => renderDay(date, false))}
                 </div>
               </div>
             );
