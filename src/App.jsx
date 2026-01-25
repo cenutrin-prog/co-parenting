@@ -1289,7 +1289,7 @@ const CoParentingApp = () => {
               {/* Turno en franja mañana - ancho completo, parte superior */}
               {turnoCorto && (
                 <div className="absolute inset-x-0 top-0 flex items-start justify-center">
-                  <span className="text-[8px] text-black bg-white/90 w-full text-center leading-tight">{turnoCorto}</span>
+                  <span className="text-[8px] font-bold text-black bg-white/90 w-full text-center leading-tight">{turnoCorto}</span>
                 </div>
               )}
             </div>
@@ -1300,7 +1300,7 @@ const CoParentingApp = () => {
               {/* Actividad debajo del turno */}
               {actividadInfo && turnoCorto && (
                 <div className="absolute inset-x-0 top-0 flex items-start justify-center">
-                  <span className="text-[7px] bg-white/90 w-full text-center leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
+                  <span className="text-[7px] font-bold bg-white/90 w-full text-center leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
                 </div>
               )}
             </div>
@@ -1311,7 +1311,7 @@ const CoParentingApp = () => {
               {/* Si solo hay actividad (sin turno), mostrarla en mañana */}
               {actividadInfo && !turnoCorto && (
                 <div className="absolute inset-x-0 top-0 flex items-start justify-center" style={{ top: '-200%' }}>
-                  <span className="text-[8px] bg-white/90 w-full text-center leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
+                  <span className="text-[8px] font-bold bg-white/90 w-full text-center leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
                 </div>
               )}
             </div>
@@ -1325,10 +1325,10 @@ const CoParentingApp = () => {
       return (
         <div className="h-full flex flex-col overflow-hidden">
           {/* Cabecera fija - solo días de la semana */}
-          <div className="p-1 bg-white border-b">
+          <div className="px-1 py-2 bg-white border-b">
             <div className="grid grid-cols-7 gap-0.5">
               {dayLetters.map((d, i) => (
-                <div key={d} className="text-[10px] text-center font-bold"
+                <div key={d} className="text-[10px] font-bold flex items-center justify-center"
                   style={{ color: i >= 5 ? '#dc2626' : '#888' }}>{d}</div>
               ))}
             </div>
@@ -1363,10 +1363,10 @@ const CoParentingApp = () => {
     return (
       <div className="h-full flex flex-col overflow-hidden">
         {/* Cabecera fija - solo días de la semana */}
-        <div className="p-1 bg-white border-b">
+        <div className="px-1 py-2 bg-white border-b">
           <div className="grid grid-cols-7 gap-0.5">
             {dayLetters.map((d, i) => (
-              <div key={d} className="text-[10px] text-center font-bold"
+              <div key={d} className="text-[10px] font-bold flex items-center justify-center"
                 style={{ color: i >= 5 ? '#dc2626' : '#888' }}>{d}</div>
             ))}
           </div>
