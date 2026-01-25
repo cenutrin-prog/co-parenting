@@ -1172,25 +1172,23 @@ const CoParentingApp = () => {
       return { tipo: tipoCorto, entrada: parsed.entrada || '', salida: parsed.salida || '' };
     };
 
-    // Generar semanas continuas (incluye días de meses anteriores/siguientes)
-    const generateContinuousWeeks = (centerDate, numWeeksBefore = 4, numWeeksAfter = 8) => {
+    // Generar semanas continuas de todo el año actual
+    const generateYearWeeks = () => {
       const weeks = [];
+      const currentYear = currentDate.getFullYear();
       
-      // Encontrar el lunes de la semana que contiene el primer día del mes actual
-      const firstOfMonth = new Date(centerDate.getFullYear(), centerDate.getMonth(), 1);
-      const firstDayOfWeek = firstOfMonth.getDay();
-      const mondayOfFirstWeek = new Date(firstOfMonth);
-      mondayOfFirstWeek.setDate(firstOfMonth.getDate() - (firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1));
+      // Empezar desde el primer lunes que incluya el 1 de enero
+      const firstOfYear = new Date(currentYear, 0, 1);
+      const firstDayOfWeek = firstOfYear.getDay();
+      const startMonday = new Date(firstOfYear);
+      startMonday.setDate(firstOfYear.getDate() - (firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1));
       
-      // Retroceder numWeeksBefore semanas
-      const startMonday = new Date(mondayOfFirstWeek);
-      startMonday.setDate(startMonday.getDate() - (numWeeksBefore * 7));
+      // Terminar en el último día de diciembre
+      const endDate = new Date(currentYear, 11, 31);
       
-      // Generar todas las semanas
-      const totalWeeks = numWeeksBefore + numWeeksAfter + 6; // 6 semanas típicas de un mes
       let currentMonday = new Date(startMonday);
       
-      for (let w = 0; w < totalWeeks; w++) {
+      while (currentMonday <= endDate) {
         const week = [];
         for (let d = 0; d < 7; d++) {
           const date = new Date(currentMonday);
@@ -1204,48 +1202,50 @@ const CoParentingApp = () => {
       return weeks;
     };
 
-    const weeks = generateContinuousWeeks(currentDate);
+    const weeks = generateYearWeeks();
 
-    // Detectar cambio de mes para mostrar separador
+    // Obtener etiqueta del mes
     const getMonthLabel = (date) => {
       return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
     };
 
-    // Renderizar un día
-    const renderDay = (date, isChild = false) => {
+    // Renderizar un día para hijos
+    const renderDayChild = (date) => {
       const today = isToday(date);
       const redDay = isRedDay(date);
       const dateKey = formatDate(date);
-      const isCurrentMonth = date.getMonth() === currentDate.getMonth();
       
-      if (isChild) {
-        const ck_m = getScheduleKey(date, currentUser, 'Mañana');
-        const ck_t = getScheduleKey(date, currentUser, 'Tarde');
-        const ck_n = getScheduleKey(date, currentUser, 'Noche');
-        
-        return (
-          <div key={dateKey} 
-            className="rounded flex flex-col overflow-hidden cursor-pointer"
-            onClick={() => { setCurrentDate(date); setCurrentView('daily'); }}
-            style={{ 
-              border: today ? '2px solid black' : '1px solid #e5e7eb',
-              opacity: isCurrentMonth ? 1 : 0.4,
-              minHeight: 60
-            }}>
-            <div className="text-[9px] text-center font-bold bg-white"
-              style={{ color: redDay ? '#dc2626' : '#666' }}>
-              {date.getDate()}
-            </div>
-            <div className="flex-1 flex flex-col">
-              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(schedule[ck_m]) }} />
-              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(schedule[ck_t]) }} />
-              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(schedule[ck_n]) }} />
-            </div>
+      const ck_m = getScheduleKey(date, currentUser, 'Mañana');
+      const ck_t = getScheduleKey(date, currentUser, 'Tarde');
+      const ck_n = getScheduleKey(date, currentUser, 'Noche');
+      
+      return (
+        <div key={dateKey} 
+          className="rounded flex flex-col overflow-hidden cursor-pointer"
+          onClick={() => { setCurrentDate(date); setCurrentView('daily'); }}
+          style={{ 
+            border: today ? '2px solid black' : '1px solid #e5e7eb',
+            minHeight: 55
+          }}>
+          <div className="text-[9px] text-center font-bold bg-white"
+            style={{ color: redDay ? '#dc2626' : '#666' }}>
+            {date.getDate()}
           </div>
-        );
-      }
+          <div className="flex-1 flex flex-col">
+            <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(schedule[ck_m]) }} />
+            <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(schedule[ck_t]) }} />
+            <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(schedule[ck_n]) }} />
+          </div>
+        </div>
+      );
+    };
 
-      // Vista para padres
+    // Renderizar un día para padres
+    const renderDayParent = (date) => {
+      const today = isToday(date);
+      const redDay = isRedDay(date);
+      const dateKey = formatDate(date);
+      
       const mKeyD = getScheduleKey(date, 'child1', 'Mañana');
       const tKeyD = getScheduleKey(date, 'child1', 'Tarde');
       const nKeyD = getScheduleKey(date, 'child1', 'Noche');
@@ -1265,7 +1265,6 @@ const CoParentingApp = () => {
       const actividadPadre = turnos[`${turnoKey}_padre_actividad`] || '';
       const turnoCorto = getTurnoCorto(turnoPadre);
       const actividadInfo = getActividadInfo(actividadPadre);
-      const hayTurnoOActividad = turnoCorto || actividadInfo;
       
       return (
         <div key={dateKey} 
@@ -1273,40 +1272,49 @@ const CoParentingApp = () => {
           onClick={() => { setCurrentDate(date); setCurrentView('daily'); }}
           style={{ 
             border: today ? '2px solid black' : '1px solid #e5e7eb',
-            opacity: isCurrentMonth ? 1 : 0.4,
-            minHeight: 60
+            minHeight: 55
           }}>
+          {/* Número del día */}
           <div className="text-[9px] text-center font-bold bg-white"
             style={{ color: redDay ? '#dc2626' : '#666' }}>
             {date.getDate()}
           </div>
           
-          <div className="flex-1 flex flex-col relative">
-            <div className="flex-1 flex">
+          {/* 6 rectángulos: 3 filas x 2 columnas */}
+          <div className="flex-1 flex flex-col">
+            {/* Fila Mañana - con turno superpuesto en parte superior */}
+            <div className="flex-1 flex relative">
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(mAssignedD) }} />
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(mAssignedE) }} />
+              {/* Turno en franja mañana - ancho completo, parte superior */}
+              {turnoCorto && (
+                <div className="absolute inset-x-0 top-0 flex items-start justify-center">
+                  <span className="text-[8px] text-black bg-white/90 w-full text-center leading-tight">{turnoCorto}</span>
+                </div>
+              )}
             </div>
-            <div className="flex-1 flex">
+            {/* Fila Tarde - con actividad superpuesta si hay turno */}
+            <div className="flex-1 flex relative">
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(tAssignedD) }} />
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(tAssignedE) }} />
+              {/* Actividad debajo del turno */}
+              {actividadInfo && turnoCorto && (
+                <div className="absolute inset-x-0 top-0 flex items-start justify-center">
+                  <span className="text-[7px] bg-white/90 w-full text-center leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
+                </div>
+              )}
             </div>
-            <div className="flex-1 flex">
+            {/* Fila Noche */}
+            <div className="flex-1 flex relative">
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedD) }} />
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedE) }} />
+              {/* Si solo hay actividad (sin turno), mostrarla en mañana */}
+              {actividadInfo && !turnoCorto && (
+                <div className="absolute inset-x-0 top-0 flex items-start justify-center" style={{ top: '-200%' }}>
+                  <span className="text-[8px] bg-white/90 w-full text-center leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
+                </div>
+              )}
             </div>
-            
-            {hayTurnoOActividad && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ lineHeight: 1.1 }}>
-                {turnoCorto && (
-                  <span className="text-[10px] font-black text-black bg-white/90 px-0.5 rounded leading-tight">{turnoCorto}</span>
-                )}
-                {actividadInfo && (
-                  <span className="text-[8px] font-bold bg-white/90 px-0.5 rounded leading-tight" style={{ color: '#9333ea' }}>
-                    {actividadInfo.tipo}
-                  </span>
-                )}
-              </div>
-            )}
           </div>
         </div>
       );
@@ -1316,15 +1324,8 @@ const CoParentingApp = () => {
     if (isChildUser) {
       return (
         <div className="h-full flex flex-col overflow-hidden">
-          {/* Cabecera fija */}
+          {/* Cabecera fija - solo días de la semana */}
           <div className="p-1 bg-white border-b">
-            <div className="flex items-center justify-between mb-1">
-              <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={20} /></button>
-              <div className="text-sm font-bold">
-                <span style={{ color: childColor }}>{childName}</span> - {capitalize(getMonthLabel(currentDate))}
-              </div>
-              <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={20} /></button>
-            </div>
             <div className="grid grid-cols-7 gap-0.5">
               {dayLetters.map((d, i) => (
                 <div key={d} className="text-[10px] text-center font-bold"
@@ -1333,22 +1334,22 @@ const CoParentingApp = () => {
             </div>
           </div>
           
-          {/* Calendario scrollable */}
+          {/* Calendario scrollable - todo el año */}
           <div className="flex-1 overflow-y-auto p-1">
             {weeks.map((week, weekIdx) => {
               const firstDayOfWeek = week[0];
-              const showMonthHeader = firstDayOfWeek.getDate() <= 7 && firstDayOfWeek.getDate() > 0;
+              const showMonthHeader = firstDayOfWeek.getDate() <= 7;
               const monthLabel = showMonthHeader ? getMonthLabel(firstDayOfWeek) : null;
               
               return (
                 <div key={weekIdx}>
-                  {monthLabel && weekIdx > 0 && (
+                  {monthLabel && (
                     <div className="text-center text-xs font-bold text-gray-600 py-1 bg-gray-100 rounded my-1">
                       {capitalize(monthLabel)}
                     </div>
                   )}
                   <div className="grid grid-cols-7 gap-0.5 mb-0.5">
-                    {week.map(date => renderDay(date, true))}
+                    {week.map(date => renderDayChild(date))}
                   </div>
                 </div>
               );
@@ -1358,44 +1359,11 @@ const CoParentingApp = () => {
       );
     }
 
-    // Vista para padres - calendario continuo
+    // Vista para padres - calendario continuo todo el año
     return (
       <div className="h-full flex flex-col overflow-hidden">
-        {/* Cabecera fija */}
+        {/* Cabecera fija - solo días de la semana */}
         <div className="p-1 bg-white border-b">
-          <div className="flex items-center justify-between mb-1">
-            <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={20} /></button>
-            <div className="text-sm font-bold text-gray-700">{capitalize(getMonthLabel(currentDate))}</div>
-            <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={20} /></button>
-          </div>
-          
-          {/* Leyenda */}
-          <div className="flex flex-wrap justify-center gap-1 mb-1 text-[7px]">
-            <span className="flex items-center gap-0.5">
-              <span style={{ backgroundColor: 'rgba(59, 130, 246, 0.5)', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
-              {parents.parent1 || 'Padre'}
-            </span>
-            <span className="flex items-center gap-0.5">
-              <span style={{ backgroundColor: '#FBBF24', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
-              {parents.parent2 || 'Madre'}
-            </span>
-            {parents.other && (
-              <span className="flex items-center gap-0.5">
-                <span style={{ backgroundColor: '#f472b6', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
-                {parents.other}
-              </span>
-            )}
-            <span className="flex items-center gap-0.5">
-              <span style={{ backgroundColor: '#000000', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
-              Decisión
-            </span>
-            <span className="flex items-center gap-0.5">
-              <span style={{ backgroundColor: '#dc2626', width: 8, height: 8, borderRadius: 2, display: 'inline-block' }}></span>
-              Pago
-            </span>
-          </div>
-          
-          {/* Días de la semana */}
           <div className="grid grid-cols-7 gap-0.5">
             {dayLetters.map((d, i) => (
               <div key={d} className="text-[10px] text-center font-bold"
@@ -1404,22 +1372,22 @@ const CoParentingApp = () => {
           </div>
         </div>
         
-        {/* Calendario scrollable continuo */}
+        {/* Calendario scrollable continuo - todo el año */}
         <div className="flex-1 overflow-y-auto p-1">
           {weeks.map((week, weekIdx) => {
             const firstDayOfWeek = week[0];
-            const showMonthHeader = firstDayOfWeek.getDate() <= 7 && firstDayOfWeek.getDate() > 0;
+            const showMonthHeader = firstDayOfWeek.getDate() <= 7;
             const monthLabel = showMonthHeader ? getMonthLabel(firstDayOfWeek) : null;
             
             return (
               <div key={weekIdx}>
-                {monthLabel && weekIdx > 0 && (
+                {monthLabel && (
                   <div className="text-center text-xs font-bold text-gray-600 py-1 bg-gray-100 rounded my-1">
                     {capitalize(monthLabel)}
                   </div>
                 )}
                 <div className="grid grid-cols-7 gap-0.5 mb-0.5">
-                  {week.map(date => renderDay(date, false))}
+                  {week.map(date => renderDayParent(date))}
                 </div>
               </div>
             );
