@@ -16,9 +16,9 @@ const CoParentingApp = () => {
   const [schedule, setSchedule] = useState({});
   const [notes, setNotes] = useState({});
   const [turnos, setTurnos] = useState({});
-  // Vista inicial: Global para padre, week para otros
+  // Vista inicial: Month para padre, week para otros
   const getInitialView = () => {
-    if (savedUser === 'parent1') return 'globalMonth';
+    if (savedUser === 'parent1') return 'month';
     return 'week';
   };
   const [currentView, setCurrentView] = useState(getInitialView());
@@ -1289,7 +1289,7 @@ const CoParentingApp = () => {
               {/* Turno en franja mañana - ancho completo, parte superior */}
               {turnoCorto && (
                 <div className="absolute inset-x-0 top-0 flex items-start justify-center">
-                  <span className="text-[8px] font-bold text-black bg-white/90 w-full text-center leading-tight">{turnoCorto}</span>
+                  <span className="text-[8px] font-bold text-black bg-white px-1 rounded leading-tight">{turnoCorto}</span>
                 </div>
               )}
             </div>
@@ -1300,7 +1300,7 @@ const CoParentingApp = () => {
               {/* Actividad debajo del turno */}
               {actividadInfo && turnoCorto && (
                 <div className="absolute inset-x-0 top-0 flex items-start justify-center">
-                  <span className="text-[7px] font-bold bg-white/90 w-full text-center leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
+                  <span className="text-[7px] font-bold bg-white px-1 rounded leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
                 </div>
               )}
             </div>
@@ -1311,7 +1311,7 @@ const CoParentingApp = () => {
               {/* Si solo hay actividad (sin turno), mostrarla en mañana */}
               {actividadInfo && !turnoCorto && (
                 <div className="absolute inset-x-0 top-0 flex items-start justify-center" style={{ top: '-200%' }}>
-                  <span className="text-[8px] font-bold bg-white/90 w-full text-center leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
+                  <span className="text-[8px] font-bold bg-white px-1 rounded leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
                 </div>
               )}
             </div>
