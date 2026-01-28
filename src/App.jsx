@@ -528,6 +528,12 @@ const CoParentingApp = () => {
   const ActividadPadreSelector = ({ fecha }) => {
     const actividadActual = turnos[`${fecha}_padre_actividad`] || '';
     const parsed = parseActividadPadre(actividadActual);
+    const [textoLocal, setTextoLocal] = useState(parsed.textoOtro || '');
+    
+    // Actualizar texto local cuando cambia el tipo a OTRO o cambia la fecha
+    useEffect(() => {
+      setTextoLocal(parsed.textoOtro || '');
+    }, [fecha, parsed.tipo]);
 
     const updateActividad = (field, value) => {
       const newActividad = buildActividadPadre(
@@ -540,6 +546,12 @@ const CoParentingApp = () => {
       // GUARDAR EN SUPABASE
       if (currentUser === 'parent1') {
         saveOneTurno(fecha, 'padre_actividad', newActividad);
+      }
+    };
+    
+    const handleTextoBlur = () => {
+      if (textoLocal !== parsed.textoOtro) {
+        updateActividad('textoOtro', textoLocal);
       }
     };
 
@@ -562,8 +574,9 @@ const CoParentingApp = () => {
         {parsed.tipo === 'OTRO' && (
           <input 
             type="text" 
-            value={parsed.textoOtro || ''} 
-            onChange={e => updateActividad('textoOtro', e.target.value)}
+            value={textoLocal} 
+            onChange={e => setTextoLocal(e.target.value)}
+            onBlur={handleTextoBlur}
             placeholder="Escribe la actividad..."
             className="w-full text-[9px] p-1 border rounded"
           />
