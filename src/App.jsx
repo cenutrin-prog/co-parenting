@@ -529,18 +529,41 @@ const CoParentingApp = () => {
     const actividadActual = turnos[`${fecha}_padre_actividad`] || '';
     const parsed = parseActividadPadre(actividadActual);
     const [textoLocal, setTextoLocal] = useState(parsed.textoOtro || '');
+    const [initialized, setInitialized] = useState(false);
     
-    // Actualizar texto local cuando cambia la fecha o cuando se carga desde la base de datos
+    // Inicializar texto local solo cuando cambia la fecha
     useEffect(() => {
       setTextoLocal(parsed.textoOtro || '');
-    }, [fecha, parsed.textoOtro]);
+      setInitialized(true);
+    }, [fecha]);
+    
+    // Guardar automáticamente después de 500ms de dejar de escribir
+    useEffect(() => {
+      if (!initialized) return;
+      if (textoLocal === parsed.textoOtro) return;
+      
+      const timer = setTimeout(() => {
+        const newActividad = buildActividadPadre(
+          parsed.tipo,
+          parsed.entrada,
+          parsed.salida,
+          textoLocal
+        );
+        setTurnos(prev => ({ ...prev, [`${fecha}_padre_actividad`]: newActividad }));
+        if (currentUser === 'parent1') {
+          saveOneTurno(fecha, 'padre_actividad', newActividad);
+        }
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }, [textoLocal, initialized]);
 
     const updateActividad = (field, value) => {
       const newActividad = buildActividadPadre(
         field === 'tipo' ? value : parsed.tipo,
         field === 'entrada' ? value : parsed.entrada,
         field === 'salida' ? value : parsed.salida,
-        field === 'textoOtro' ? value : (field === 'tipo' && value !== 'OTRO' ? '' : parsed.textoOtro)
+        field === 'textoOtro' ? value : (field === 'tipo' && value !== 'OTRO' ? '' : textoLocal)
       );
       setTurnos(prev => ({ ...prev, [`${fecha}_padre_actividad`]: newActividad }));
       // GUARDAR EN SUPABASE
@@ -548,15 +571,9 @@ const CoParentingApp = () => {
         saveOneTurno(fecha, 'padre_actividad', newActividad);
       }
     };
-    
-    const handleTextoBlur = () => {
-      if (textoLocal !== parsed.textoOtro) {
-        updateActividad('textoOtro', textoLocal);
-      }
-    };
 
     const selectStyle = "w-full text-[9px] p-0.5 border rounded";
-    const hasActividad = parsed.tipo || parsed.entrada || parsed.salida;
+    const hasActividad = parsed.tipo || parsed.entrada || parsed.salida || textoLocal;
 
     return (
       <div className="flex flex-col gap-0.5 p-0.5 rounded mt-0.5" style={{ backgroundColor: hasActividad ? colors.parent1 + '20' : 'white' }}>
@@ -576,7 +593,6 @@ const CoParentingApp = () => {
             type="text" 
             value={textoLocal} 
             onChange={e => setTextoLocal(e.target.value)}
-            onBlur={handleTextoBlur}
             placeholder="Escribe la actividad..."
             className="w-full text-[9px] p-1 border rounded"
           />
