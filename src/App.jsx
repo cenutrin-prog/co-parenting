@@ -530,10 +530,10 @@ const CoParentingApp = () => {
     const parsed = parseActividadPadre(actividadActual);
     const [textoLocal, setTextoLocal] = useState(parsed.textoOtro || '');
     
-    // Actualizar texto local cuando cambia el tipo a OTRO o cambia la fecha
+    // Actualizar texto local cuando cambia la fecha o cuando se carga desde la base de datos
     useEffect(() => {
       setTextoLocal(parsed.textoOtro || '');
-    }, [fecha, parsed.tipo]);
+    }, [fecha, parsed.textoOtro]);
 
     const updateActividad = (field, value) => {
       const newActividad = buildActividadPadre(
@@ -2872,46 +2872,52 @@ const CoParentingApp = () => {
       
       {/* Botones de navegación - DOS FILAS PARA PADRE (parent1) */}
       {isParent1 ? (
-        <div className="border-b">
-          {/* Primera fila: vistas de calendario */}
-          <div className="flex gap-1 p-1 pb-0.5">
-            <button onClick={() => setCurrentView('daily')} className={`px-2 py-1 text-xs rounded flex items-center gap-0.5 ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-              <Calendar size={11} /> Día
-            </button>
-            <button onClick={() => setCurrentView('weekAssign')} className={`px-2 py-1 text-xs rounded ${currentView === 'weekAssign' ? 'bg-green-600 text-white' : 'bg-gray-100'}`}
-              style={{ fontWeight: 'bold' }}>
-              +Sem
-            </button>
-            <button onClick={() => setCurrentView('week')} className={`px-2 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-              Sem
-            </button>
-            <button onClick={() => setCurrentView('month')} className={`px-3 py-2 text-sm rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+        <div className="border-b flex">
+          {/* Columna izquierda: botones pequeños en dos filas */}
+          <div className="flex flex-col gap-0.5 p-1">
+            {/* Primera fila */}
+            <div className="flex gap-1">
+              <button onClick={() => setCurrentView('daily')} className={`px-2 py-1 text-xs rounded flex items-center gap-0.5 ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+                <Calendar size={11} /> Día
+              </button>
+              <button onClick={() => setCurrentView('weekAssign')} className={`px-2 py-1 text-xs rounded ${currentView === 'weekAssign' ? 'bg-green-600 text-white' : 'bg-gray-100'}`}
+                style={{ fontWeight: 'bold' }}>
+                +Sem
+              </button>
+              <button onClick={() => setCurrentView('week')} className={`px-2 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+                Sem
+              </button>
+              <button onClick={() => setCurrentView('globalMonth')} className={`px-2 py-1 text-xs rounded ${currentView === 'globalMonth' ? 'bg-purple-600 text-white' : 'bg-gray-100'}`}
+                style={{ fontWeight: 'bold' }}>
+                Global
+              </button>
+              <button onClick={() => setCurrentView('stats')} className={`px-1.5 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+                <BarChart3 size={14} />
+              </button>
+            </div>
+            {/* Segunda fila: vistas por persona */}
+            <div className="flex gap-1">
+              <button onClick={() => setCurrentView('motherMonth')} className={`px-2 py-1 text-xs rounded ${currentView === 'motherMonth' ? 'text-white' : 'bg-gray-100'}`}
+                style={{ backgroundColor: currentView === 'motherMonth' ? colors.parent2 : undefined, color: '#065f46', fontWeight: 'bold' }}>
+                {parents.parent2 || 'Madre'}
+              </button>
+              <button onClick={() => setCurrentView('child1month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child1month' ? 'text-white' : 'bg-gray-100'}`}
+                style={{ backgroundColor: currentView === 'child1month' ? colors.child1 : undefined, color: currentView === 'child1month' ? '#000' : undefined }}>
+                {children.child1 || 'Hijo 1'}
+              </button>
+              <button onClick={() => setCurrentView('child2month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
+                style={{ backgroundColor: currentView === 'child2month' ? colors.child2 : undefined, color: currentView === 'child2month' ? '#000' : undefined }}>
+                {children.child2 || 'Hijo 2'}
+              </button>
+            </div>
+          </div>
+          {/* Columna derecha: botones Mes y Año grandes */}
+          <div className="flex gap-1 p-1">
+            <button onClick={() => setCurrentView('month')} className={`px-4 text-sm font-bold rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
               Mes
             </button>
-            <button onClick={() => setCurrentView('year')} className={`px-3 py-2 text-sm rounded ${currentView === 'year' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            <button onClick={() => setCurrentView('year')} className={`px-4 text-sm font-bold rounded ${currentView === 'year' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
               Año
-            </button>
-            <button onClick={() => setCurrentView('globalMonth')} className={`px-2 py-1 text-xs rounded ${currentView === 'globalMonth' ? 'bg-purple-600 text-white' : 'bg-gray-100'}`}
-              style={{ fontWeight: 'bold' }}>
-              Global
-            </button>
-            <button onClick={() => setCurrentView('stats')} className={`px-1.5 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-              <BarChart3 size={14} />
-            </button>
-          </div>
-          {/* Segunda fila: vistas por persona */}
-          <div className="flex gap-1 p-1 pt-0.5">
-            <button onClick={() => setCurrentView('motherMonth')} className={`px-2 py-1 text-xs rounded ${currentView === 'motherMonth' ? 'text-white' : 'bg-gray-100'}`}
-              style={{ backgroundColor: currentView === 'motherMonth' ? colors.parent2 : undefined, color: '#065f46', fontWeight: 'bold' }}>
-              {parents.parent2 || 'Madre'}
-            </button>
-            <button onClick={() => setCurrentView('child1month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child1month' ? 'text-white' : 'bg-gray-100'}`}
-              style={{ backgroundColor: currentView === 'child1month' ? colors.child1 : undefined, color: currentView === 'child1month' ? '#000' : undefined }}>
-              {children.child1 || 'Hijo 1'}
-            </button>
-            <button onClick={() => setCurrentView('child2month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
-              style={{ backgroundColor: currentView === 'child2month' ? colors.child2 : undefined, color: currentView === 'child2month' ? '#000' : undefined }}>
-              {children.child2 || 'Hijo 2'}
             </button>
           </div>
         </div>
