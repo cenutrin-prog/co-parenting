@@ -342,15 +342,15 @@ const CoParentingApp = () => {
 
   // Parsear actividad extra del padre (formato: "CURSO|09:00|15:00")
   const parseActividadPadre = (actividad) => {
-    if (!actividad) return { tipo: '', entrada: '', salida: '' };
-    const [tipo, entrada, salida] = actividad.split('|');
-    return { tipo: tipo || '', entrada: entrada || '', salida: salida || '' };
+    if (!actividad) return { tipo: '', entrada: '', salida: '', textoOtro: '' };
+    const [tipo, entrada, salida, textoOtro] = actividad.split('|');
+    return { tipo: tipo || '', entrada: entrada || '', salida: salida || '', textoOtro: textoOtro || '' };
   };
 
   // Construir string de actividad padre
-  const buildActividadPadre = (tipo, entrada, salida) => {
-    if (!tipo && !entrada && !salida) return '';
-    return `${tipo || ''}|${entrada || ''}|${salida || ''}`;
+  const buildActividadPadre = (tipo, entrada, salida, textoOtro = '') => {
+    if (!tipo && !entrada && !salida && !textoOtro) return '';
+    return `${tipo || ''}|${entrada || ''}|${salida || ''}|${textoOtro || ''}`;
   };
 
   // Parsear turno de la madre (formato: "Mañana|09:00|15:00;Tarde|17:00|21:00")
@@ -524,7 +524,7 @@ const CoParentingApp = () => {
     }
   };
 
-  // Componente selector de actividad extra del padre (3 desplegables en 1 fila)
+  // Componente selector de actividad extra del padre (3 desplegables en 1 fila + campo texto para OTRO)
   const ActividadPadreSelector = ({ fecha }) => {
     const actividadActual = turnos[`${fecha}_padre_actividad`] || '';
     const parsed = parseActividadPadre(actividadActual);
@@ -533,7 +533,8 @@ const CoParentingApp = () => {
       const newActividad = buildActividadPadre(
         field === 'tipo' ? value : parsed.tipo,
         field === 'entrada' ? value : parsed.entrada,
-        field === 'salida' ? value : parsed.salida
+        field === 'salida' ? value : parsed.salida,
+        field === 'textoOtro' ? value : (field === 'tipo' && value !== 'OTRO' ? '' : parsed.textoOtro)
       );
       setTurnos(prev => ({ ...prev, [`${fecha}_padre_actividad`]: newActividad }));
       // GUARDAR EN SUPABASE
@@ -546,16 +547,27 @@ const CoParentingApp = () => {
     const hasActividad = parsed.tipo || parsed.entrada || parsed.salida;
 
     return (
-      <div className="flex gap-0.5 p-0.5 rounded mt-0.5" style={{ backgroundColor: hasActividad ? colors.parent1 + '20' : 'white' }}>
-        <select value={parsed.tipo || ''} onChange={e => updateActividad('tipo', e.target.value)} className={selectStyle}>
-          {tiposActividadPadre.map(t => <option key={t || 'empty'} value={t}>{t || '-'}</option>)}
-        </select>
-        <select value={parsed.entrada || ''} onChange={e => updateActividad('entrada', e.target.value)} className={selectStyle}>
-          {horasEntradaPadre.map(h => <option key={h || 'e'} value={h}>{h || '-'}</option>)}
-        </select>
-        <select value={parsed.salida || ''} onChange={e => updateActividad('salida', e.target.value)} className={selectStyle}>
-          {horasSalidaPadre.map(h => <option key={h || 's'} value={h}>{h || '-'}</option>)}
-        </select>
+      <div className="flex flex-col gap-0.5 p-0.5 rounded mt-0.5" style={{ backgroundColor: hasActividad ? colors.parent1 + '20' : 'white' }}>
+        <div className="flex gap-0.5">
+          <select value={parsed.tipo || ''} onChange={e => updateActividad('tipo', e.target.value)} className={selectStyle}>
+            {tiposActividadPadre.map(t => <option key={t || 'empty'} value={t}>{t || '-'}</option>)}
+          </select>
+          <select value={parsed.entrada || ''} onChange={e => updateActividad('entrada', e.target.value)} className={selectStyle}>
+            {horasEntradaPadre.map(h => <option key={h || 'e'} value={h}>{h || '-'}</option>)}
+          </select>
+          <select value={parsed.salida || ''} onChange={e => updateActividad('salida', e.target.value)} className={selectStyle}>
+            {horasSalidaPadre.map(h => <option key={h || 's'} value={h}>{h || '-'}</option>)}
+          </select>
+        </div>
+        {parsed.tipo === 'OTRO' && (
+          <input 
+            type="text" 
+            value={parsed.textoOtro || ''} 
+            onChange={e => updateActividad('textoOtro', e.target.value)}
+            placeholder="Escribe la actividad..."
+            className="w-full text-[9px] p-1 border rounded"
+          />
+        )}
       </div>
     );
   };
@@ -1167,9 +1179,9 @@ const CoParentingApp = () => {
       else if (parsed.tipo === 'CURSO') tipoCorto = 'CUR';
       else if (parsed.tipo === 'F.O.') tipoCorto = 'FO';
       else if (parsed.tipo === 'VIAJE') tipoCorto = 'VIA';
-      else if (parsed.tipo === 'OTRO') tipoCorto = 'OTR';
+      else if (parsed.tipo === 'OTRO') tipoCorto = parsed.textoOtro || 'OTR';
       else tipoCorto = parsed.tipo.substring(0, 3);
-      return { tipo: tipoCorto, entrada: parsed.entrada || '', salida: parsed.salida || '' };
+      return { tipo: tipoCorto, entrada: parsed.entrada || '', salida: parsed.salida || '', esTextoPersonalizado: parsed.tipo === 'OTRO' && parsed.textoOtro };
     };
 
     // Generar semanas continuas de todo el año actual
@@ -1286,10 +1298,20 @@ const CoParentingApp = () => {
             <div className="flex-1 flex relative">
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(mAssignedD) }} />
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(mAssignedE) }} />
-              {/* Turno en franja mañana - ancho completo, parte superior */}
+              {/* Turno en franja mañana - ajustado a las letras */}
               {turnoCorto && (
-                <div className="absolute inset-x-0 top-0 flex items-start justify-center">
+                <div className="absolute inset-0 flex items-center justify-center">
                   <span className="text-[8px] font-bold text-black bg-white px-1 rounded leading-tight">{turnoCorto}</span>
+                </div>
+              )}
+              {/* Si solo hay actividad (sin turno), mostrarla aquí */}
+              {actividadInfo && !turnoCorto && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  {actividadInfo.esTextoPersonalizado ? (
+                    <span className="text-[5px] font-bold leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
+                  ) : (
+                    <span className="text-[8px] font-bold bg-white px-1 rounded leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
+                  )}
                 </div>
               )}
             </div>
@@ -1299,21 +1321,19 @@ const CoParentingApp = () => {
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(tAssignedE) }} />
               {/* Actividad debajo del turno */}
               {actividadInfo && turnoCorto && (
-                <div className="absolute inset-x-0 top-0 flex items-start justify-center">
-                  <span className="text-[7px] font-bold bg-white px-1 rounded leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  {actividadInfo.esTextoPersonalizado ? (
+                    <span className="text-[5px] font-bold leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
+                  ) : (
+                    <span className="text-[7px] font-bold bg-white px-1 rounded leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
+                  )}
                 </div>
               )}
             </div>
             {/* Fila Noche */}
-            <div className="flex-1 flex relative">
+            <div className="flex-1 flex">
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedD) }} />
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedE) }} />
-              {/* Si solo hay actividad (sin turno), mostrarla en mañana */}
-              {actividadInfo && !turnoCorto && (
-                <div className="absolute inset-x-0 top-0 flex items-start justify-center" style={{ top: '-200%' }}>
-                  <span className="text-[8px] font-bold bg-white px-1 rounded leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -2592,13 +2612,14 @@ const CoParentingApp = () => {
       else if (parsed.tipo === 'CURSO') tipoCorto = 'CUR';
       else if (parsed.tipo === 'F.O.') tipoCorto = 'FO';
       else if (parsed.tipo === 'VIAJE') tipoCorto = 'VIA';
-      else if (parsed.tipo === 'OTRO') tipoCorto = 'OTR';
+      else if (parsed.tipo === 'OTRO') tipoCorto = parsed.textoOtro || 'OTR';
       else tipoCorto = parsed.tipo.substring(0, 3);
       
       return {
         tipo: tipoCorto,
         entrada: parsed.entrada || '',
-        salida: parsed.salida || ''
+        salida: parsed.salida || '',
+        esTextoPersonalizado: parsed.tipo === 'OTRO' && parsed.textoOtro
       };
     };
 
@@ -2727,7 +2748,7 @@ const CoParentingApp = () => {
                             {/* Turno y/o Actividad del padre centrado */}
                             {hayTurno && (
                               <div className="absolute inset-0 flex items-center justify-center">
-                                <div className="bg-white/80 px-0.5 rounded flex flex-col items-center" style={{ lineHeight: 1 }}>
+                                <div className={actividadInfo?.esTextoPersonalizado && !turnoCorto ? '' : 'bg-white/80 px-0.5 rounded'} style={{ lineHeight: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                   {/* Turno de trabajo */}
                                   {turnoCorto && (
                                     <span className="text-[4px] font-bold text-black">{turnoCorto}</span>
@@ -2735,8 +2756,8 @@ const CoParentingApp = () => {
                                   {/* Actividad (MÁSTER, CURSO, etc.) */}
                                   {actividadInfo && (
                                     <>
-                                      <span className="text-[3px] font-bold" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
-                                      {(actividadInfo.entrada || actividadInfo.salida) && (
+                                      <span className={actividadInfo.esTextoPersonalizado ? 'text-[3px]' : 'text-[3px] font-bold'} style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
+                                      {(actividadInfo.entrada || actividadInfo.salida) && !actividadInfo.esTextoPersonalizado && (
                                         <span className="text-[3px]" style={{ color: '#9333ea' }}>
                                           {actividadInfo.entrada && actividadInfo.salida 
                                             ? `${actividadInfo.entrada}-${actividadInfo.salida}`
@@ -2851,10 +2872,10 @@ const CoParentingApp = () => {
             <button onClick={() => setCurrentView('week')} className={`px-2 py-1 text-xs rounded ${currentView === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
               Sem
             </button>
-            <button onClick={() => setCurrentView('month')} className={`px-2 py-1 text-xs rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            <button onClick={() => setCurrentView('month')} className={`px-3 py-2 text-sm rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
               Mes
             </button>
-            <button onClick={() => setCurrentView('year')} className={`px-2 py-1 text-xs rounded ${currentView === 'year' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            <button onClick={() => setCurrentView('year')} className={`px-3 py-2 text-sm rounded ${currentView === 'year' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
               Año
             </button>
             <button onClick={() => setCurrentView('globalMonth')} className={`px-2 py-1 text-xs rounded ${currentView === 'globalMonth' ? 'bg-purple-600 text-white' : 'bg-gray-100'}`}
