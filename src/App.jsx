@@ -16,9 +16,9 @@ const CoParentingApp = () => {
   const [schedule, setSchedule] = useState({});
   const [notes, setNotes] = useState({});
   const [turnos, setTurnos] = useState({});
-  // Vista inicial: Month para padre, week para otros
+  // Vista inicial: Global para padre, week para otros
   const getInitialView = () => {
-    if (savedUser === 'parent1') return 'month';
+    if (savedUser === 'parent1') return 'globalMonth';
     return 'week';
   };
   const [currentView, setCurrentView] = useState(getInitialView());
@@ -488,13 +488,9 @@ const CoParentingApp = () => {
           // Solo cargar turnos del padre si el usuario actual es parent1
           if (t.turno_padre && currentUser === 'parent1') {
             // Separar turno y actividad si están unidos con "||"
-            console.log('turno_padre raw para fecha', t.fecha, ':', t.turno_padre);
             const partes = t.turno_padre.split('||');
             if (partes[0]) newTurnos[`${t.fecha}_padre`] = partes[0];
-            if (partes[1]) {
-              console.log('Actividad encontrada:', partes[1]);
-              newTurnos[`${t.fecha}_padre_actividad`] = partes[1];
-            }
+            if (partes[1]) newTurnos[`${t.fecha}_padre_actividad`] = partes[1];
           }
           // Turnos de la madre: cargar para todos
           if (t.turno_madre) newTurnos[`${t.fecha}_madre`] = t.turno_madre;
@@ -528,58 +524,43 @@ const CoParentingApp = () => {
     }
   };
 
-  // Componente selector de actividad extra del padre (3 desplegables en 1 fila + campo texto para OTRO)
+  // Componente selector de actividad extra del padre (3 desplegables en 1 fila)
   const ActividadPadreSelector = ({ fecha }) => {
     const actividadActual = turnos[`${fecha}_padre_actividad`] || '';
     const parsed = parseActividadPadre(actividadActual);
-    const [textoLocal, setTextoLocal] = useState('');
-    const textoLocalRef = React.useRef(textoLocal);
-    
-    // Sincronizar ref con estado
-    useEffect(() => {
-      textoLocalRef.current = textoLocal;
-    }, [textoLocal]);
-    
-    // Inicializar texto local cuando cambia la fecha o se carga de Supabase
-    useEffect(() => {
+    const [textoLocal, setTextoLocal] = React.useState(parsed.textoOtro || '');
+
+    // Sincronizar cuando cambia la fecha o se carga de BD
+    React.useEffect(() => {
       setTextoLocal(parsed.textoOtro || '');
     }, [fecha, actividadActual]);
-    
-    // Guardar con debounce de 800ms
-    useEffect(() => {
-      if (parsed.tipo !== 'OTRO') return;
-      if (textoLocal === parsed.textoOtro) return;
-      
-      const timer = setTimeout(() => {
-        const newActividad = buildActividadPadre(parsed.tipo, parsed.entrada, parsed.salida, textoLocalRef.current);
-        console.log('Guardando actividad con texto:', textoLocalRef.current, 'newActividad:', newActividad);
-        setTurnos(prev => ({ ...prev, [`${fecha}_padre_actividad`]: newActividad }));
-        if (currentUser === 'parent1') {
-          saveOneTurno(fecha, 'padre_actividad', newActividad);
-        }
-      }, 800);
-      
-      return () => clearTimeout(timer);
-    }, [textoLocal]);
 
-    const updateActividad = (field, value) => {
-      // Cuando cambia el tipo, preservar textoLocal si es OTRO
-      const textoParaGuardar = field === 'tipo' ? (value === 'OTRO' ? textoLocal : '') : textoLocal;
-      const newActividad = buildActividadPadre(
-        field === 'tipo' ? value : parsed.tipo,
-        field === 'entrada' ? value : parsed.entrada,
-        field === 'salida' ? value : parsed.salida,
-        textoParaGuardar
-      );
-      console.log('updateActividad:', field, value, 'newActividad:', newActividad);
+    const guardarActividad = (tipo, entrada, salida, texto) => {
+      const newActividad = buildActividadPadre(tipo, entrada, salida, texto);
       setTurnos(prev => ({ ...prev, [`${fecha}_padre_actividad`]: newActividad }));
       if (currentUser === 'parent1') {
         saveOneTurno(fecha, 'padre_actividad', newActividad);
       }
     };
 
+    const updateActividad = (field, value) => {
+      guardarActividad(
+        field === 'tipo' ? value : parsed.tipo,
+        field === 'entrada' ? value : parsed.entrada,
+        field === 'salida' ? value : parsed.salida,
+        field === 'tipo' && value !== 'OTRO' ? '' : parsed.textoOtro
+      );
+    };
+
+    // Guardar texto cuando pierde foco
+    const handleTextoBlur = () => {
+      if (textoLocal !== parsed.textoOtro) {
+        guardarActividad(parsed.tipo, parsed.entrada, parsed.salida, textoLocal);
+      }
+    };
+
     const selectStyle = "w-full text-[9px] p-0.5 border rounded";
-    const hasActividad = parsed.tipo || parsed.entrada || parsed.salida || textoLocal;
+    const hasActividad = parsed.tipo || parsed.entrada || parsed.salida;
 
     return (
       <div className="flex flex-col gap-0.5 p-0.5 rounded mt-0.5" style={{ backgroundColor: hasActividad ? colors.parent1 + '20' : 'white' }}>
@@ -599,6 +580,7 @@ const CoParentingApp = () => {
             type="text" 
             value={textoLocal} 
             onChange={e => setTextoLocal(e.target.value)}
+            onBlur={handleTextoBlur}
             placeholder="Escribe la actividad..."
             className="w-full text-[9px] p-1 border rounded"
           />
@@ -851,7 +833,7 @@ const CoParentingApp = () => {
                       parsed.tipo === 'CURSO' ? 'CURSO' : 
                       parsed.tipo === 'F.O.' ? 'F.O.' : 
                       parsed.tipo === 'VIAJE' ? 'VIAJE' : 
-                      parsed.tipo === 'OTRO' ? 'OTRO' : parsed.tipo
+                      parsed.tipo === 'OTRO' ? (parsed.textoOtro || 'OTRO') : parsed.tipo
                     ) : '';
                     return (
                       <div key={`act_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: tieneActividad ? '#9333ea30' : '#f3f4f6', color: '#9333ea' }}>
@@ -1057,7 +1039,7 @@ const CoParentingApp = () => {
               parsed.tipo === 'CURSO' ? 'CURSO' : 
               parsed.tipo === 'F.O.' ? 'F.O.' : 
               parsed.tipo === 'VIAJE' ? 'VIAJE' : 
-              parsed.tipo === 'OTRO' ? 'OTRO' : parsed.tipo
+              parsed.tipo === 'OTRO' ? (parsed.textoOtro || 'OTRO') : parsed.tipo
             ) : '';
             return (
               <div key={`act_m_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: tieneActividad ? '#9333ea30' : '#f3f4f6', color: '#9333ea' }}>
@@ -1178,275 +1160,223 @@ const CoParentingApp = () => {
 
   // VISTA MES - Con turnos mejorados (compacta sin scroll)
   const MonthView = () => {
+    const monthDates = getMonthDates(currentDate);
+    const monthLabel = currentDate.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
     const isChildUser = currentUser === 'child1' || currentUser === 'child2';
+    const isParentUser = currentUser === 'parent1' || currentUser === 'parent2';
     const childName = isChildUser ? (children[currentUser] || 'Hijo').toUpperCase() : '';
     const childColor = isChildUser ? colors[currentUser] : '';
-    const dayLetters = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
-    // Colores estilo calendario anual
-    const getColorForAssigned = (assigned) => {
-      if (assigned === 'parent1') return 'rgba(59, 130, 246, 0.5)';
-      if (assigned === 'parent2') return '#FBBF24';
-      if (assigned === 'other') return '#f472b6';
-      return '#e5e7eb';
-    };
-    
-    const getColorWithSpecial = (assigned) => {
-      if (!assigned) return '#f3f4f6';
-      if (assigned.includes('_decision_')) return '#000000';
-      if (assigned.includes('_pago')) return '#dc2626';
-      return getColorForAssigned(assigned);
-    };
-
-    // Obtener código corto del turno del padre
-    const getTurnoCorto = (turnoStr) => {
-      if (!turnoStr) return '';
-      return turnoStr.split(' ')[0].split('(')[0];
-    };
-
-    // Obtener actividad del padre
-    const getActividadInfo = (actividadStr) => {
-      if (!actividadStr) return null;
-      const parsed = parseActividadPadre(actividadStr);
-      if (!parsed.tipo) return null;
-      let tipoCorto = '';
-      if (parsed.tipo === 'CLASE MÁSTER') tipoCorto = 'MÁS';
-      else if (parsed.tipo === 'CURSO') tipoCorto = 'CUR';
-      else if (parsed.tipo === 'F.O.') tipoCorto = 'FO';
-      else if (parsed.tipo === 'VIAJE') tipoCorto = 'VIA';
-      else if (parsed.tipo === 'OTRO') tipoCorto = parsed.textoOtro || 'OTR';
-      else tipoCorto = parsed.tipo.substring(0, 3);
-      return { tipo: tipoCorto, entrada: parsed.entrada || '', salida: parsed.salida || '', esTextoPersonalizado: parsed.tipo === 'OTRO' && parsed.textoOtro };
-    };
-
-    // Generar semanas continuas de todo el año actual
-    const generateYearWeeks = () => {
-      const weeks = [];
-      const currentYear = currentDate.getFullYear();
-      
-      // Empezar desde el primer lunes que incluya el 1 de enero
-      const firstOfYear = new Date(currentYear, 0, 1);
-      const firstDayOfWeek = firstOfYear.getDay();
-      const startMonday = new Date(firstOfYear);
-      startMonday.setDate(firstOfYear.getDate() - (firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1));
-      
-      // Terminar en el último día de diciembre
-      const endDate = new Date(currentYear, 11, 31);
-      
-      let currentMonday = new Date(startMonday);
-      
-      while (currentMonday <= endDate) {
-        const week = [];
-        for (let d = 0; d < 7; d++) {
-          const date = new Date(currentMonday);
-          date.setDate(currentMonday.getDate() + d);
-          week.push(date);
-        }
-        weeks.push(week);
-        currentMonday.setDate(currentMonday.getDate() + 7);
+    // Función para obtener iniciales del nombre (JL para Jose Luis, Ire para Irene)
+    const getIniciales = (nombre, isParent1) => {
+      if (!nombre) return isParent1 ? 'P' : 'M';
+      if (isParent1) {
+        // Para el padre: iniciales de cada palabra (Jose Luis -> JL)
+        return nombre.split(' ').map(p => p[0]).join('').toUpperCase();
+      } else {
+        // Para la madre: primeras 3 letras (Irene -> Ire)
+        return nombre.substring(0, 3);
       }
-      
-      return weeks;
     };
 
-    const weeks = generateYearWeeks();
-
-    // Obtener etiqueta del mes
-    const getMonthLabel = (date) => {
-      return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+    // Función para obtener texto corto del turno madre (M, T, N, M/T)
+    const getTurnoMadreCorto = (turnoStr) => {
+      if (!turnoStr) return '';
+      const parsed = parseTurnoMadre(turnoStr);
+      if (parsed.length === 0) return '';
+      const abreviar = (tipo) => {
+        if (!tipo) return '';
+        if (tipo.toLowerCase().startsWith('mañ')) return 'M';
+        if (tipo.toLowerCase().startsWith('tar')) return 'T';
+        if (tipo.toLowerCase().startsWith('noc')) return 'N';
+        return tipo[0].toUpperCase();
+      };
+      if (parsed.length === 1) return abreviar(parsed[0].tipo);
+      return parsed.map(t => abreviar(t.tipo)).filter(t => t).join('/');
     };
 
-    // Renderizar un día para hijos
-    const renderDayChild = (date) => {
-      const today = isToday(date);
-      const redDay = isRedDay(date);
-      const dateKey = formatDate(date);
-      
-      const ck_m = getScheduleKey(date, currentUser, 'Mañana');
-      const ck_t = getScheduleKey(date, currentUser, 'Tarde');
-      const ck_n = getScheduleKey(date, currentUser, 'Noche');
-      
-      return (
-        <div key={dateKey} 
-          className="rounded flex flex-col overflow-hidden cursor-pointer"
-          onClick={() => { setCurrentDate(date); setCurrentView('daily'); }}
-          style={{ 
-            border: today ? '2px solid black' : '1px solid #e5e7eb',
-            minHeight: 55
-          }}>
-          <div className="text-[9px] text-center font-bold bg-white"
-            style={{ color: redDay ? '#dc2626' : '#666' }}>
-            {date.getDate()}
-          </div>
-          <div className="flex-1 flex flex-col">
-            <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(schedule[ck_m]) }} />
-            <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(schedule[ck_t]) }} />
-            <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(schedule[ck_n]) }} />
-          </div>
-        </div>
-      );
-    };
+    // Calcular número de filas del mes (semanas)
+    const numRows = Math.ceil(monthDates.length / 7);
 
-    // Renderizar un día para padres
-    const renderDayParent = (date) => {
-      const today = isToday(date);
-      const redDay = isRedDay(date);
-      const dateKey = formatDate(date);
-      
-      const mKeyD = getScheduleKey(date, 'child1', 'Mañana');
-      const tKeyD = getScheduleKey(date, 'child1', 'Tarde');
-      const nKeyD = getScheduleKey(date, 'child1', 'Noche');
-      const mKeyE = getScheduleKey(date, 'child2', 'Mañana');
-      const tKeyE = getScheduleKey(date, 'child2', 'Tarde');
-      const nKeyE = getScheduleKey(date, 'child2', 'Noche');
-      
-      const mAssignedD = schedule[mKeyD];
-      const tAssignedD = schedule[tKeyD];
-      const nAssignedD = schedule[nKeyD];
-      const mAssignedE = schedule[mKeyE];
-      const tAssignedE = schedule[tKeyE];
-      const nAssignedE = schedule[nKeyE];
-      
-      const turnoKey = getTurnoKey(date);
-      const turnoPadre = turnos[`${turnoKey}_padre`] || '';
-      const actividadPadre = turnos[`${turnoKey}_padre_actividad`] || '';
-      const turnoCorto = getTurnoCorto(turnoPadre);
-      const actividadInfo = getActividadInfo(actividadPadre);
-      
-      return (
-        <div key={dateKey} 
-          className="rounded flex flex-col overflow-hidden cursor-pointer"
-          onClick={() => { setCurrentDate(date); setCurrentView('daily'); }}
-          style={{ 
-            border: today ? '2px solid black' : '1px solid #e5e7eb',
-            minHeight: 55
-          }}>
-          {/* Número del día */}
-          <div className="text-[9px] text-center font-bold bg-white"
-            style={{ color: redDay ? '#dc2626' : '#666' }}>
-            {date.getDate()}
-          </div>
-          
-          {/* 6 rectángulos: 3 filas x 2 columnas */}
-          <div className="flex-1 flex flex-col">
-            {/* Fila Mañana - con turno superpuesto en parte superior */}
-            <div className="flex-1 flex relative">
-              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(mAssignedD) }} />
-              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(mAssignedE) }} />
-              {/* Turno en franja mañana - ajustado a las letras */}
-              {turnoCorto && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-[8px] font-bold text-black bg-white px-1 rounded leading-tight">{turnoCorto}</span>
-                </div>
-              )}
-              {/* Si solo hay actividad (sin turno), mostrarla aquí */}
-              {actividadInfo && !turnoCorto && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  {actividadInfo.esTextoPersonalizado ? (
-                    <span className="text-[5px] font-bold leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
-                  ) : (
-                    <span className="text-[8px] font-bold bg-white px-1 rounded leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
-                  )}
-                </div>
-              )}
-            </div>
-            {/* Fila Tarde - con actividad superpuesta si hay turno */}
-            <div className="flex-1 flex relative">
-              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(tAssignedD) }} />
-              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(tAssignedE) }} />
-              {/* Actividad debajo del turno */}
-              {actividadInfo && turnoCorto && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  {actividadInfo.esTextoPersonalizado ? (
-                    <span className="text-[5px] font-bold leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
-                  ) : (
-                    <span className="text-[7px] font-bold bg-white px-1 rounded leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
-                  )}
-                </div>
-              )}
-            </div>
-            {/* Fila Noche */}
-            <div className="flex-1 flex">
-              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedD) }} />
-              <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedE) }} />
-            </div>
-          </div>
-        </div>
-      );
-    };
+    const inicialesPadre = getIniciales(parents.parent1, true);
+    const inicialesMadre = getIniciales(parents.parent2, false);
 
-    // Vista para hijos
+    // Si es hijo, usar vista grande como ChildMonthView
     if (isChildUser) {
       return (
-        <div className="h-full flex flex-col overflow-hidden">
-          {/* Cabecera fija - solo días de la semana */}
-          <div className="px-1 py-2 bg-white border-b">
-            <div className="grid grid-cols-7 gap-0.5">
-              {dayLetters.map((d, i) => (
-                <div key={d} className="text-[10px] font-bold flex items-center justify-center"
-                  style={{ color: i >= 5 ? '#dc2626' : '#888' }}>{d}</div>
-              ))}
+        <div className="p-0.5 h-full flex flex-col">
+          <div className="flex items-center justify-between mb-0.5">
+            <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-0.5"><ChevronLeft size={14} /></button>
+            <div className="text-xs font-medium">
+              <span style={{ color: childColor }}>{childName}</span> - {capitalize(monthLabel)}
             </div>
+            <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-0.5"><ChevronRight size={14} /></button>
           </div>
-          
-          {/* Calendario scrollable - todo el año */}
-          <div className="flex-1 overflow-y-auto p-1">
-            {weeks.map((week, weekIdx) => {
-              const firstDayOfWeek = week[0];
-              const showMonthHeader = firstDayOfWeek.getDate() <= 7;
-              const monthLabel = showMonthHeader ? getMonthLabel(firstDayOfWeek) : null;
-              
-              return (
-                <div key={weekIdx}>
-                  {monthLabel && (
-                    <div className="text-center text-xs font-bold text-gray-600 py-1 bg-gray-100 rounded my-1">
-                      {capitalize(monthLabel)}
+          <div className="flex-1 overflow-hidden">
+            <div className="grid h-full" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: `14px repeat(${numRows}, 1fr)`, gap: 2 }}>
+              {daysOfWeek.map((d, i) => (
+                <div key={d} className="text-[8px] font-bold text-center" 
+                  style={{ color: (i === 5 || i === 6) ? '#dc2626' : 'inherit' }}>{d}</div>
+              ))}
+              {monthDates.map((date, idx) => {
+                const dateKey = date ? formatDate(date) : `empty-${idx}`;
+                if (!date) return <div key={dateKey} className="border rounded bg-gray-50" />;
+                const today = isToday(date);
+                const redDay = isRedDay(date);
+
+                return (
+                  <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden">
+                    <div className="flex justify-start mb-0.5">
+                      <span className={`font-bold text-[9px] ${today ? 'bg-black text-white rounded-full w-4 h-4 flex items-center justify-center' : ''}`}
+                        style={{ color: today ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
+                        {date.getDate()}
+                      </span>
                     </div>
-                  )}
-                  <div className="grid grid-cols-7 gap-0.5 mb-0.5">
-                    {week.map(date => renderDayChild(date))}
+                    <div className="flex-1 flex flex-col gap-0.5">
+                      {periods.map((period) => {
+                        const ck = getScheduleKey(date, currentUser, period);
+                        const assigned = schedule[ck];
+                        let bg = '#e5e7eb';
+                        let txt = '-';
+                        if (assigned === 'parent1') { bg = colors.parent1; txt = 'Papá'; }
+                        else if (assigned === 'parent2') { bg = colors.parent2; txt = 'Mamá'; }
+                        else if (assigned === 'other') { bg = colors.other; txt = parents.other || 'Otro'; }
+                        return <div key={`${dateKey}_${period}`} className="flex-1 flex items-center justify-center rounded font-bold text-[7px]" style={{ backgroundColor: bg }}>{txt}</div>;
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       );
     }
 
-    // Vista para padres - calendario continuo todo el año
+    // Vista para padres (con turnos)
     return (
-      <div className="h-full flex flex-col overflow-hidden">
-        {/* Cabecera fija - solo días de la semana */}
-        <div className="px-1 py-2 bg-white border-b">
-          <div className="grid grid-cols-7 gap-0.5">
-            {dayLetters.map((d, i) => (
-              <div key={d} className="text-[10px] font-bold flex items-center justify-center"
-                style={{ color: i >= 5 ? '#dc2626' : '#888' }}>{d}</div>
-            ))}
-          </div>
+      <div className="p-2">
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => setCurrentDate(d => addMonths(d, -1))} className="p-1"><ChevronLeft size={18} /></button>
+          <div className="text-sm font-medium">{capitalize(monthLabel)}</div>
+          <button onClick={() => setCurrentDate(d => addMonths(d, 1))} className="p-1"><ChevronRight size={18} /></button>
         </div>
-        
-        {/* Calendario scrollable continuo - todo el año */}
-        <div className="flex-1 overflow-y-auto p-1">
-          {weeks.map((week, weekIdx) => {
-            const firstDayOfWeek = week[0];
-            const showMonthHeader = firstDayOfWeek.getDate() <= 7;
-            const monthLabel = showMonthHeader ? getMonthLabel(firstDayOfWeek) : null;
-            
-            return (
-              <div key={weekIdx}>
-                {monthLabel && (
-                  <div className="text-center text-xs font-bold text-gray-600 py-1 bg-gray-100 rounded my-1">
-                    {capitalize(monthLabel)}
+        <div>
+          <div className="grid" style={{ gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+            {daysOfWeek.map((d, i) => (
+              <div key={d} className="text-[9px] font-bold text-center py-1" 
+                style={{ color: (i === 5 || i === 6) ? '#dc2626' : 'inherit' }}>{d}</div>
+            ))}
+            {monthDates.map((date, idx) => {
+              const dateKey = date ? formatDate(date) : `empty-${idx}`;
+              if (!date) return <div key={dateKey} className="border rounded bg-gray-50 min-h-[52px]" />;
+              
+              const turnoKey = getTurnoKey(date);
+              const turnoPadre = turnos[`${turnoKey}_padre`] || '';
+              const turnoMadre = turnos[`${turnoKey}_madre`] || '';
+              const { codigo: codP } = parseTurnoPadre(turnoPadre);
+              const turnoMadreCorto = getTurnoMadreCorto(turnoMadre);
+
+              return (
+                <div key={dateKey} className="border rounded p-0.5 flex flex-col overflow-hidden min-h-[52px]">
+                  {/* Cabecera con número y turnos */}
+                  <div className="flex" style={{ fontSize: 6, lineHeight: '8px' }}>
+                    {/* Número del día */}
+                    {(() => {
+                      const today = isToday(date);
+                      const redDay = isRedDay(date);
+                      return (
+                        <span className={`font-bold text-[9px] mr-0.5 ${today ? 'bg-black text-white rounded-full w-4 h-4 flex items-center justify-center' : ''}`}
+                          style={{ color: today ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
+                          {date.getDate()}
+                        </span>
+                      );
+                    })()}
+                    
+                    {/* Turnos de los padres */}
+                    <div className="flex-1 flex flex-col text-[6px]">
+                      {/* Turno del padre - SOLO visible para parent1 */}
+                      {currentUser === 'parent1' && (
+                        <div className="flex justify-between" style={{ color: colors.parent1 }}>
+                          <span className="font-bold">{inicialesPadre}</span>
+                          <span className="font-bold">{codP || '-'}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between" style={{ color: '#065f46' }}>
+                        <span className="font-bold">{inicialesMadre}</span>
+                        <span className="font-bold">{turnoMadreCorto || '-'}</span>
+                      </div>
+                    </div>
                   </div>
-                )}
-                <div className="grid grid-cols-7 gap-0.5 mb-0.5">
-                  {week.map(date => renderDayParent(date))}
+                  
+                  {/* Asignaciones */}
+                  <div className="flex-1 flex flex-col gap-0.5 mt-0.5">
+                    {periods.map((period) => {
+                      const c1k = getScheduleKey(date, 'child1', period);
+                      const c2k = getScheduleKey(date, 'child2', period);
+                      const c1Assigned = schedule[c1k];
+                      const c2Assigned = schedule[c2k];
+                      
+                      // Verificar si es una asignación especial para child1
+                      const c1IsDecision = c1Assigned?.includes('_decision_');
+                      const c1IsPago = c1Assigned?.includes('_pago');
+                      const c1BaseParent = c1Assigned?.split('_')[0];
+                      const c1a = c1Assigned === currentUser || c1BaseParent === currentUser;
+                      
+                      // Verificar si es una asignación especial para child2
+                      const c2IsDecision = c2Assigned?.includes('_decision_');
+                      const c2IsPago = c2Assigned?.includes('_pago');
+                      const c2BaseParent = c2Assigned?.split('_')[0];
+                      const c2a = c2Assigned === currentUser || c2BaseParent === currentUser;
+                      
+                      // Determinar colores para child1
+                      let c1BgColor = '#e5e7eb';
+                      let c1TxtColor = '#999';
+                      if (c1a) {
+                        if (c1IsDecision) {
+                          c1BgColor = '#000000';
+                          c1TxtColor = '#ffffff';
+                        } else if (c1IsPago) {
+                          c1BgColor = '#dc2626';
+                          c1TxtColor = '#ffffff';
+                        } else {
+                          c1BgColor = colors.child1;
+                          c1TxtColor = '#000';
+                        }
+                      }
+                      
+                      // Determinar colores para child2
+                      let c2BgColor = '#e5e7eb';
+                      let c2TxtColor = '#999';
+                      if (c2a) {
+                        if (c2IsDecision) {
+                          c2BgColor = '#000000';
+                          c2TxtColor = '#ffffff';
+                        } else if (c2IsPago) {
+                          c2BgColor = '#dc2626';
+                          c2TxtColor = '#ffffff';
+                        } else {
+                          c2BgColor = colors.child2;
+                          c2TxtColor = '#000';
+                        }
+                      }
+                      
+                      return (
+                        <div key={`${dateKey}_${period}`} className="flex gap-0.5 flex-1">
+                          <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c1BgColor, color: c1TxtColor }}>
+                            {c1a ? (children.child1 || 'H1')[0] : '-'}
+                          </div>
+                          <div className="flex-1 flex items-center justify-center rounded font-bold text-[8px]" style={{ backgroundColor: c2BgColor, color: c2TxtColor }}>
+                            {c2a ? (children.child2 || 'H2')[0] : '-'}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -2459,7 +2389,7 @@ const CoParentingApp = () => {
       if (parsed.tipo === 'CURSO') return 'CUR';
       if (parsed.tipo === 'F.O.') return 'FO';
       if (parsed.tipo === 'VIAJE') return 'VIA';
-      if (parsed.tipo === 'OTRO') return 'OTR';
+      if (parsed.tipo === 'OTRO') return parsed.textoOtro || 'OTR';
       return parsed.tipo.substring(0, 3);
     };
 
@@ -2654,7 +2584,7 @@ const CoParentingApp = () => {
         tipo: tipoCorto,
         entrada: parsed.entrada || '',
         salida: parsed.salida || '',
-        esTextoPersonalizado: parsed.tipo === 'OTRO' && parsed.textoOtro
+        esPersonalizado: parsed.tipo === 'OTRO' && parsed.textoOtro
       };
     };
 
@@ -2783,7 +2713,7 @@ const CoParentingApp = () => {
                             {/* Turno y/o Actividad del padre centrado */}
                             {hayTurno && (
                               <div className="absolute inset-0 flex items-center justify-center">
-                                <div className={actividadInfo?.esTextoPersonalizado && !turnoCorto ? '' : 'bg-white/80 px-0.5 rounded'} style={{ lineHeight: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <div className="bg-white/80 px-0.5 rounded flex flex-col items-center" style={{ lineHeight: 1 }}>
                                   {/* Turno de trabajo */}
                                   {turnoCorto && (
                                     <span className="text-[4px] font-bold text-black">{turnoCorto}</span>
@@ -2791,8 +2721,8 @@ const CoParentingApp = () => {
                                   {/* Actividad (MÁSTER, CURSO, etc.) */}
                                   {actividadInfo && (
                                     <>
-                                      <span className={actividadInfo.esTextoPersonalizado ? 'text-[3px]' : 'text-[3px] font-bold'} style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
-                                      {(actividadInfo.entrada || actividadInfo.salida) && !actividadInfo.esTextoPersonalizado && (
+                                      <span className="text-[3px] font-bold" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
+                                      {(actividadInfo.entrada || actividadInfo.salida) && (
                                         <span className="text-[3px]" style={{ color: '#9333ea' }}>
                                           {actividadInfo.entrada && actividadInfo.salida 
                                             ? `${actividadInfo.entrada}-${actividadInfo.salida}`
@@ -2897,7 +2827,6 @@ const CoParentingApp = () => {
         <div className="border-b flex">
           {/* Columna izquierda: botones pequeños en dos filas */}
           <div className="flex flex-col gap-0.5 p-1">
-            {/* Primera fila */}
             <div className="flex gap-1">
               <button onClick={() => setCurrentView('daily')} className={`px-2 py-1 text-xs rounded flex items-center gap-0.5 ${currentView === 'daily' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
                 <Calendar size={11} /> Día
@@ -2917,7 +2846,6 @@ const CoParentingApp = () => {
                 <BarChart3 size={14} />
               </button>
             </div>
-            {/* Segunda fila: vistas por persona */}
             <div className="flex gap-1">
               <button onClick={() => setCurrentView('motherMonth')} className={`px-2 py-1 text-xs rounded ${currentView === 'motherMonth' ? 'text-white' : 'bg-gray-100'}`}
                 style={{ backgroundColor: currentView === 'motherMonth' ? colors.parent2 : undefined, color: '#065f46', fontWeight: 'bold' }}>
