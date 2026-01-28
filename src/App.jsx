@@ -851,7 +851,7 @@ const CoParentingApp = () => {
                       parsed.tipo === 'CURSO' ? 'CURSO' : 
                       parsed.tipo === 'F.O.' ? 'F.O.' : 
                       parsed.tipo === 'VIAJE' ? 'VIAJE' : 
-                      parsed.tipo === 'OTRO' ? 'OTRO' : parsed.tipo
+                      parsed.tipo === 'OTRO' ? (parsed.textoOtro || 'OTRO') : parsed.tipo
                     ) : '';
                     return (
                       <div key={`act_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: tieneActividad ? '#9333ea30' : '#f3f4f6', color: '#9333ea' }}>
@@ -1057,7 +1057,7 @@ const CoParentingApp = () => {
               parsed.tipo === 'CURSO' ? 'CURSO' : 
               parsed.tipo === 'F.O.' ? 'F.O.' : 
               parsed.tipo === 'VIAJE' ? 'VIAJE' : 
-              parsed.tipo === 'OTRO' ? 'OTRO' : parsed.tipo
+              parsed.tipo === 'OTRO' ? (parsed.textoOtro || 'OTRO') : parsed.tipo
             ) : '';
             return (
               <div key={`act_m_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: tieneActividad ? '#9333ea30' : '#f3f4f6', color: '#9333ea' }}>
@@ -2459,7 +2459,7 @@ const CoParentingApp = () => {
       if (parsed.tipo === 'CURSO') return 'CUR';
       if (parsed.tipo === 'F.O.') return 'FO';
       if (parsed.tipo === 'VIAJE') return 'VIA';
-      if (parsed.tipo === 'OTRO') return 'OTR';
+      if (parsed.tipo === 'OTRO') return parsed.textoOtro || 'OTR';
       return parsed.tipo.substring(0, 3);
     };
 
