@@ -528,45 +528,47 @@ const CoParentingApp = () => {
   const ActividadPadreSelector = ({ fecha }) => {
     const actividadActual = turnos[`${fecha}_padre_actividad`] || '';
     const parsed = parseActividadPadre(actividadActual);
-    const [textoLocal, setTextoLocal] = useState(parsed.textoOtro || '');
-    const [initialized, setInitialized] = useState(false);
+    const [textoLocal, setTextoLocal] = useState('');
+    const textoLocalRef = React.useRef(textoLocal);
     
-    // Inicializar texto local solo cuando cambia la fecha
+    // Sincronizar ref con estado
+    useEffect(() => {
+      textoLocalRef.current = textoLocal;
+    }, [textoLocal]);
+    
+    // Inicializar texto local cuando cambia la fecha o se carga de Supabase
     useEffect(() => {
       setTextoLocal(parsed.textoOtro || '');
-      setInitialized(true);
-    }, [fecha]);
+    }, [fecha, actividadActual]);
     
-    // Guardar automáticamente después de 500ms de dejar de escribir
+    // Guardar con debounce de 800ms
     useEffect(() => {
-      if (!initialized) return;
+      if (parsed.tipo !== 'OTRO') return;
       if (textoLocal === parsed.textoOtro) return;
       
       const timer = setTimeout(() => {
-        const newActividad = buildActividadPadre(
-          parsed.tipo,
-          parsed.entrada,
-          parsed.salida,
-          textoLocal
-        );
+        const newActividad = buildActividadPadre(parsed.tipo, parsed.entrada, parsed.salida, textoLocalRef.current);
+        console.log('Guardando actividad con texto:', textoLocalRef.current, 'newActividad:', newActividad);
         setTurnos(prev => ({ ...prev, [`${fecha}_padre_actividad`]: newActividad }));
         if (currentUser === 'parent1') {
           saveOneTurno(fecha, 'padre_actividad', newActividad);
         }
-      }, 500);
+      }, 800);
       
       return () => clearTimeout(timer);
-    }, [textoLocal, initialized]);
+    }, [textoLocal]);
 
     const updateActividad = (field, value) => {
+      // Cuando cambia el tipo, preservar textoLocal si es OTRO
+      const textoParaGuardar = field === 'tipo' ? (value === 'OTRO' ? textoLocal : '') : textoLocal;
       const newActividad = buildActividadPadre(
         field === 'tipo' ? value : parsed.tipo,
         field === 'entrada' ? value : parsed.entrada,
         field === 'salida' ? value : parsed.salida,
-        field === 'textoOtro' ? value : (field === 'tipo' && value !== 'OTRO' ? '' : textoLocal)
+        textoParaGuardar
       );
+      console.log('updateActividad:', field, value, 'newActividad:', newActividad);
       setTurnos(prev => ({ ...prev, [`${fecha}_padre_actividad`]: newActividad }));
-      // GUARDAR EN SUPABASE
       if (currentUser === 'parent1') {
         saveOneTurno(fecha, 'padre_actividad', newActividad);
       }
