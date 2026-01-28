@@ -2945,7 +2945,7 @@ const CoParentingApp = () => {
         {currentView === 'daily' && <DailyView />}
         {currentView === 'weekAssign' && <WeekAssignView />}
         {currentView === 'week' && <WeekView />}
-        {currentView === 'month' && <MonthView />}
+        {currentView === 'month' && (currentUser === 'child1' ? <ChildMonthView childKey="child1" /> : currentUser === 'child2' ? <ChildMonthView childKey="child2" /> : <MonthView />)}
         {currentView === 'year' && <YearCalendar />}
         {currentView === 'globalMonth' && <GlobalMonthCalendar />}
         {currentView === 'child1month' && <ChildMonthView childKey="child1" />}
