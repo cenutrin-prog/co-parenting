@@ -487,13 +487,20 @@ const CoParentingApp = () => {
         turnosData.forEach(t => {
           // Solo cargar turnos del padre si el usuario actual es parent1
           if (t.turno_padre && currentUser === 'parent1') {
-            // Separar turno y actividad si están unidos con "||"
+            // Separar turno y actividad si están unidos con "||" (solo primera ocurrencia)
             console.log('turno_padre raw para fecha', t.fecha, ':', t.turno_padre);
-            const partes = t.turno_padre.split('||');
-            if (partes[0]) newTurnos[`${t.fecha}_padre`] = partes[0];
-            if (partes[1]) {
-              console.log('Actividad encontrada:', partes[1]);
-              newTurnos[`${t.fecha}_padre_actividad`] = partes[1];
+            const idx = t.turno_padre.indexOf('||');
+            if (idx === -1) {
+              // No hay ||, es solo turno
+              newTurnos[`${t.fecha}_padre`] = t.turno_padre;
+            } else {
+              const turno = t.turno_padre.substring(0, idx);
+              const actividad = t.turno_padre.substring(idx + 2);
+              if (turno) newTurnos[`${t.fecha}_padre`] = turno;
+              if (actividad) {
+                console.log('Actividad encontrada:', actividad);
+                newTurnos[`${t.fecha}_padre_actividad`] = actividad;
+              }
             }
           }
           // Turnos de la madre: cargar para todos
