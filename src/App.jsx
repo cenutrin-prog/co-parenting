@@ -31,7 +31,7 @@ const CoParentingApp = () => {
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const monthsShort = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
-  const turnosPadre = [
+  const turnosPadreBase = [
     'E5DN (09:00-09:00)', 'E5D (09:00-21:00)', 'E5N (21:00-09:00)', 
     'E4DN (09:00-09:00)', 'E4D (09:00-21:00)', 'E4N (21:00-09:00)', 
     'E3DN (09:00-09:00)', 'E3D (09:00-21:00)', 'E3N (21:00-09:00)',
@@ -44,6 +44,8 @@ const CoParentingApp = () => {
     'C2 (09:00-21:00)', 'C4T (10:00-22:00)', 
     'C3D (08:15-20:15)', 'C3N (20:15-08:15)'
   ];
+  const turnosPadreExtra = turnosPadreBase.map(t => t + ' extra');
+  const turnosPadre = [...turnosPadreBase, ...turnosPadreExtra];
 
   // Tipos de actividad para el padre (segunda fila de desplegables)
   const tiposActividadPadre = ['', 'CURSO', 'CLASE MÁSTER', 'F.O.', 'VIAJE', 'OTRO'];
@@ -723,10 +725,6 @@ const CoParentingApp = () => {
                   <ActividadPadreSelector fecha={turnoKey} />
                 </div>
               )}
-              <div className="flex-1">
-                <div className="text-[10px] font-medium mb-0.5" style={{ color: colors.parent2 }}>{parents.parent2 || 'Madre'}</div>
-                <TurnoMadreSelector fecha={turnoKey} />
-              </div>
             </div>
           </div>
         )}
@@ -750,7 +748,8 @@ const CoParentingApp = () => {
                         className="w-full text-[10px] p-0.5 border rounded mb-0.5"
                         style={{ 
                           backgroundColor: scheduleValue ? (
-                            scheduleValue.includes('_decision_') ? '#000000' :
+                            scheduleValue.startsWith('parent1_decision_') ? '#6b7280' :
+                            scheduleValue.startsWith('parent2_decision_') ? '#000000' :
                             scheduleValue.includes('_pago') ? '#dc2626' :
                             colors[scheduleValue] + '40'
                           ) : 'white',
@@ -1200,7 +1199,8 @@ const CoParentingApp = () => {
     
     const getColorWithSpecial = (assigned) => {
       if (!assigned) return '#f3f4f6';
-      if (assigned.includes('_decision_')) return '#000000';
+      if (assigned.startsWith('parent1_decision_')) return '#6b7280'; // Jose Luis decisión → gris
+      if (assigned.startsWith('parent2_decision_')) return '#000000'; // Irene decisión → negro
       if (assigned.includes('_pago')) return '#dc2626';
       return getColorForAssigned(assigned);
     };
@@ -1208,7 +1208,9 @@ const CoParentingApp = () => {
     // Obtener código corto del turno del padre
     const getTurnoCorto = (turnoStr) => {
       if (!turnoStr) return '';
-      return turnoStr.split(' ')[0].split('(')[0];
+      const esExtra = turnoStr.includes(' extra');
+      const codigo = turnoStr.split(' ')[0].split('(')[0];
+      return { codigo, esExtra };
     };
 
     // Obtener actividad del padre
@@ -1317,7 +1319,9 @@ const CoParentingApp = () => {
       const turnoKey = getTurnoKey(date);
       const turnoPadre = turnos[`${turnoKey}_padre`] || '';
       const actividadPadre = turnos[`${turnoKey}_padre_actividad`] || '';
-      const turnoCorto = getTurnoCorto(turnoPadre);
+      const turnoInfo = getTurnoCorto(turnoPadre);
+      const turnoCorto = turnoInfo.codigo;
+      const esExtra = turnoInfo.esExtra;
       const actividadInfo = getActividadInfo(actividadPadre);
       
       return (
@@ -1343,7 +1347,7 @@ const CoParentingApp = () => {
               {/* Turno en franja mañana - ajustado a las letras */}
               {turnoCorto && (
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-[8px] font-bold text-black bg-white px-1 rounded leading-tight">{turnoCorto}</span>
+                  <span className={`text-[8px] font-bold px-1 rounded leading-tight ${esExtra ? 'bg-red-600 text-white' : 'bg-white text-black'}`}>{turnoCorto}</span>
                 </div>
               )}
               {/* Si solo hay actividad (sin turno), mostrarla aquí */}
@@ -2618,7 +2622,8 @@ const CoParentingApp = () => {
     // Colores especiales para decisión y pago
     const getColorWithSpecial = (assigned) => {
       if (!assigned) return '#f3f4f6';
-      if (assigned.includes('_decision_')) return '#000000'; // Negro para decisión
+      if (assigned.startsWith('parent1_decision_')) return '#6b7280'; // Jose Luis decisión → gris
+      if (assigned.startsWith('parent2_decision_')) return '#000000'; // Irene decisión → negro
       if (assigned.includes('_pago')) return '#dc2626'; // Rojo para pago
       return getColorForAssigned(assigned);
     };
@@ -2637,9 +2642,10 @@ const CoParentingApp = () => {
     
     // Obtener código corto del turno del padre (sin horario)
     const getTurnoCorto = (turnoStr) => {
-      if (!turnoStr) return '';
+      if (!turnoStr) return { codigo: '', esExtra: false };
+      const esExtra = turnoStr.includes(' extra');
       const codigo = turnoStr.split(' ')[0].split('(')[0];
-      return codigo;
+      return { codigo, esExtra };
     };
     
     // Obtener actividad del padre con formato corto
@@ -2693,8 +2699,12 @@ const CoParentingApp = () => {
             </span>
           )}
           <span className="flex items-center gap-1">
+            <span style={{ backgroundColor: '#6b7280', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
+            {parents.parent1} decisión
+          </span>
+          <span className="flex items-center gap-1">
             <span style={{ backgroundColor: '#000000', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
-            Decisión
+            {parents.parent2} decisión
           </span>
           <span className="flex items-center gap-1">
             <span style={{ backgroundColor: '#dc2626', width: 12, height: 12, borderRadius: 2, display: 'inline-block' }}></span>
@@ -2746,7 +2756,9 @@ const CoParentingApp = () => {
                       const turnoKey = getTurnoKey(date);
                       const turnoPadre = turnos[`${turnoKey}_padre`] || '';
                       const actividadPadre = turnos[`${turnoKey}_padre_actividad`] || '';
-                      const turnoCorto = getTurnoCorto(turnoPadre);
+                      const turnoInfo = getTurnoCorto(turnoPadre);
+                      const turnoCorto = turnoInfo.codigo;
+                      const esExtra = turnoInfo.esExtra;
                       const actividadInfo = getActividadInfo(actividadPadre);
                       
                       const today = isToday(date);
@@ -2790,10 +2802,10 @@ const CoParentingApp = () => {
                             {/* Turno y/o Actividad del padre centrado */}
                             {hayTurno && (
                               <div className="absolute inset-0 flex items-center justify-center">
-                                <div className={actividadInfo?.esTextoPersonalizado && !turnoCorto ? '' : 'bg-white/80 px-0.5 rounded'} style={{ lineHeight: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <div className={actividadInfo?.esTextoPersonalizado && !turnoCorto ? '' : (esExtra ? 'bg-red-600 px-0.5 rounded' : 'bg-white/80 px-0.5 rounded')} style={{ lineHeight: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                   {/* Turno de trabajo */}
                                   {turnoCorto && (
-                                    <span className="text-[4px] font-bold text-black">{turnoCorto}</span>
+                                    <span className={`text-[4px] font-bold ${esExtra ? 'text-white' : 'text-black'}`}>{turnoCorto}</span>
                                   )}
                                   {/* Actividad (MÁSTER, CURSO, etc.) */}
                                   {actividadInfo && (
@@ -2920,9 +2932,6 @@ const CoParentingApp = () => {
                 style={{ fontWeight: 'bold' }}>
                 Global
               </button>
-              <button onClick={() => setCurrentView('stats')} className={`px-1.5 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
-                <BarChart3 size={14} />
-              </button>
             </div>
             {/* Segunda fila: vistas por persona */}
             <div className="flex gap-1">
@@ -2937,6 +2946,9 @@ const CoParentingApp = () => {
               <button onClick={() => setCurrentView('child2month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
                 style={{ backgroundColor: currentView === 'child2month' ? colors.child2 : undefined, color: currentView === 'child2month' ? '#000' : undefined }}>
                 {children.child2 || 'Hijo 2'}
+              </button>
+              <button onClick={() => setCurrentView('stats')} className={`px-1.5 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+                <BarChart3 size={14} />
               </button>
             </div>
           </div>
