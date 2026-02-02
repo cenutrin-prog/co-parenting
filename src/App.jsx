@@ -2802,12 +2802,12 @@ const CoParentingApp = () => {
                             {/* Turno y/o Actividad del padre centrado */}
                             {hayTurno && (
                               <div className="absolute inset-0 flex items-center justify-center">
-                                <div className={actividadInfo?.esTextoPersonalizado && !turnoCorto ? '' : (esExtra ? 'bg-red-600 px-0.5 rounded' : 'bg-white/80 px-0.5 rounded')} style={{ lineHeight: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                  {/* Turno de trabajo */}
+                                <div style={{ lineHeight: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                  {/* Turno de trabajo - con recuadro */}
                                   {turnoCorto && (
-                                    <span className={`text-[4px] font-bold ${esExtra ? 'text-white' : 'text-black'}`}>{turnoCorto}</span>
+                                    <span className={`text-[4px] font-bold px-0.5 rounded ${esExtra ? 'bg-red-600 text-white' : 'bg-white/80 text-black'}`}>{turnoCorto}</span>
                                   )}
-                                  {/* Actividad (MÁSTER, CURSO, etc.) */}
+                                  {/* Actividad (MÁSTER, CURSO, etc.) - sin recuadro */}
                                   {actividadInfo && (
                                     <>
                                       <span className={actividadInfo.esTextoPersonalizado ? 'text-[3px]' : 'text-[3px] font-bold'} style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
