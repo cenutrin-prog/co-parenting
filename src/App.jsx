@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Calendar, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import SetupScreen from './SetupScreen';
 import { supabase } from './supabaseClient.js';
@@ -1259,6 +1259,18 @@ const CoParentingApp = () => {
 
     const weeks = generateYearWeeks();
 
+    // Referencias a cada fila de semana, para poder saltar directamente al mes actual
+    const weekRefs = useRef({});
+    const todayWeekIndex = weeks.findIndex(week => week.some(d => isToday(d)));
+
+    // Al abrir la vista Mes, saltar automáticamente a la semana de hoy (sin animación)
+    useEffect(() => {
+      const el = weekRefs.current[todayWeekIndex];
+      if (el) {
+        el.scrollIntoView({ behavior: 'auto', block: 'start' });
+      }
+    }, []);
+
     // Obtener etiqueta del mes
     const getMonthLabel = (date) => {
       return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
@@ -1445,7 +1457,7 @@ const CoParentingApp = () => {
             const monthLabel = showMonthHeader ? getMonthLabel(firstDayOfWeek) : null;
             
             return (
-              <div key={weekIdx}>
+              <div key={weekIdx} ref={el => { weekRefs.current[weekIdx] = el; }}>
                 {monthLabel && (
                   <div className="text-center text-xs font-bold text-gray-600 py-1 bg-gray-100 rounded my-1">
                     {capitalize(monthLabel)}
