@@ -16,10 +16,9 @@ const CoParentingApp = () => {
   const [schedule, setSchedule] = useState({});
   const [notes, setNotes] = useState({});
   const [turnos, setTurnos] = useState({});
-  // Vista inicial: Month para padre, week para otros
+  // Vista inicial: siempre Mes (mes actual), para cualquier usuario
   const getInitialView = () => {
-    if (savedUser === 'parent1') return 'month';
-    return 'week';
+    return 'month';
   };
   const [currentView, setCurrentView] = useState(getInitialView());
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -128,7 +127,7 @@ const CoParentingApp = () => {
     localStorage.setItem('coparenting_parents', JSON.stringify(parents));
     localStorage.setItem('coparenting_children', JSON.stringify(children));
     localStorage.setItem('coparenting_currentUser', user);
-    setCurrentUser(user); setStep('main'); setCurrentView('week');
+    setCurrentUser(user); setStep('main'); setCurrentView('month'); setCurrentDate(new Date());
   };
 
   const formatDate = useCallback((d) => { 
@@ -2954,10 +2953,10 @@ const CoParentingApp = () => {
           </div>
           {/* Columna derecha: botones Mes y Año grandes */}
           <div className="flex gap-1 p-1">
-            <button onClick={() => setCurrentView('month')} className={`px-4 text-sm font-bold rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            <button onClick={() => { setCurrentDate(new Date()); setCurrentView('month'); }} className={`px-4 text-sm font-bold rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
               Mes
             </button>
-            <button onClick={() => setCurrentView('year')} className={`px-4 text-sm font-bold rounded ${currentView === 'year' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            <button onClick={() => { setCurrentDate(new Date()); setCurrentView('year'); }} className={`px-4 text-sm font-bold rounded ${currentView === 'year' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
               Año
             </button>
           </div>
@@ -2977,7 +2976,7 @@ const CoParentingApp = () => {
           )}
           {/* Botón Mes - solo para hijos */}
           {isChild && (
-            <button onClick={() => setCurrentView('month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Mes</button>
+            <button onClick={() => { setCurrentDate(new Date()); setCurrentView('month'); }} className={`px-3 py-1.5 text-sm rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Mes</button>
           )}
         </div>
       )}
