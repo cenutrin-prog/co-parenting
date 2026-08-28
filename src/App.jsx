@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Calendar, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import SetupScreen from './SetupScreen';
 import { supabase } from './supabaseClient.js';
@@ -1260,6 +1260,17 @@ const CoParentingApp = () => {
 
     const weeks = generateYearWeeks();
 
+    // Índice de la semana que contiene el día de hoy, y referencia para poder hacer scroll hasta ella
+    const todayWeekIndex = weeks.findIndex(week => week.some(date => isToday(date)));
+    const todayWeekRef = useRef(null);
+
+    // Al abrir la vista, saltar automáticamente a la semana actual (en vez de abrir siempre en enero)
+    useEffect(() => {
+      if (todayWeekRef.current) {
+        todayWeekRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
+      }
+    }, []);
+
     // Obtener etiqueta del mes
     const getMonthLabel = (date) => {
       return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
@@ -1446,7 +1457,7 @@ const CoParentingApp = () => {
             const monthLabel = showMonthHeader ? getMonthLabel(firstDayOfWeek) : null;
             
             return (
-              <div key={weekIdx}>
+              <div key={weekIdx} ref={weekIdx === todayWeekIndex ? todayWeekRef : null}>
                 {monthLabel && (
                   <div className="text-center text-xs font-bold text-gray-600 py-1 bg-gray-100 rounded my-1">
                     {capitalize(monthLabel)}
@@ -2614,6 +2625,18 @@ const CoParentingApp = () => {
                         'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     const dayLetters = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
     
+    // Mes de hoy, y referencia para poder hacer scroll hasta su bloque en la rejilla
+    const today = new Date();
+    const todayMonthIndex = currentYear === today.getFullYear() ? today.getMonth() : -1;
+    const currentMonthRef = useRef(null);
+
+    // Al abrir la vista, saltar automáticamente al mes actual (en vez de abrir siempre en enero)
+    useEffect(() => {
+      if (currentMonthRef.current) {
+        currentMonthRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
+      }
+    }, []);
+    
     // Colores para el calendario anual: Azul padre (más transparente), Amarillo madre, Rosa otro
     const getColorForAssigned = (assigned) => {
       if (assigned === 'parent1') return 'rgba(59, 130, 246, 0.5)'; // Azul más transparente para padre
@@ -2722,7 +2745,7 @@ const CoParentingApp = () => {
               const monthDates = getMonthDatesForYear(monthIdx);
               
               return (
-                <div key={monthIdx} className="border rounded p-1">
+                <div key={monthIdx} ref={monthIdx === todayMonthIndex ? currentMonthRef : null} className="border rounded p-1">
                   {/* Nombre del mes */}
                   <div className="text-[9px] font-bold text-center mb-1 text-gray-700">{monthName}</div>
                   
@@ -2957,10 +2980,10 @@ const CoParentingApp = () => {
           </div>
           {/* Columna derecha: botones Mes y Año grandes */}
           <div className="flex gap-1 p-1">
-            <button onClick={() => setCurrentView('month')} className={`px-4 text-sm font-bold rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            <button onClick={() => { setCurrentDate(new Date()); setCurrentView('month'); }} className={`px-4 text-sm font-bold rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
               Mes
             </button>
-            <button onClick={() => setCurrentView('year')} className={`px-4 text-sm font-bold rounded ${currentView === 'year' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            <button onClick={() => { setCurrentDate(new Date()); setCurrentView('year'); }} className={`px-4 text-sm font-bold rounded ${currentView === 'year' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
               Año
             </button>
           </div>
@@ -2980,7 +3003,7 @@ const CoParentingApp = () => {
           )}
           {/* Botón Mes - solo para hijos */}
           {isChild && (
-            <button onClick={() => setCurrentView('month')} className={`px-3 py-1.5 text-sm rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Mes</button>
+            <button onClick={() => { setCurrentDate(new Date()); setCurrentView('month'); }} className={`px-3 py-1.5 text-sm rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>Mes</button>
           )}
         </div>
       )}
