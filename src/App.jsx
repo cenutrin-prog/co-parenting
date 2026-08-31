@@ -1352,7 +1352,7 @@ const CoParentingApp = () => {
       return getColorForAssigned(assigned);
     };
 
-    // Generar semanas continuas de todo el año actual
+    // Generar semanas continuas desde enero del año actual hasta diciembre del año siguiente
     const generateYearWeeks = () => {
       const weeks = [];
       const currentYear = currentDate.getFullYear();
@@ -1363,8 +1363,9 @@ const CoParentingApp = () => {
       const startMonday = new Date(firstOfYear);
       startMonday.setDate(firstOfYear.getDate() - (firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1));
       
-      // Terminar en el último día de diciembre
-      const endDate = new Date(currentYear, 11, 31);
+      // Terminar en el último día de diciembre del AÑO SIGUIENTE,
+      // para poder seguir bajando y ver también los meses del año que viene
+      const endDate = new Date(currentYear + 1, 11, 31);
       
       let currentMonday = new Date(startMonday);
       
