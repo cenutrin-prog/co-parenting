@@ -30,11 +30,6 @@ const CoParentingApp = () => {
   const [bloqueActivoDia, setBloqueActivoDia] = useState(0); // Bloque de turno/actividad que se ve en la vista Día
   const [bloquesExtraDia, setBloquesExtraDia] = useState({}); // Bloques añadidos con el botón "+" en la vista Día
   const [diaDetalle, setDiaDetalle] = useState(null); // Día cuya información ampliada se está mostrando
-  // Si el dispositivo tiene ratón (PC), la información se amplía al pasar por encima;
-  // si es táctil (móvil), se amplía al primer toque
-  const [soportaHover] = useState(() =>
-    typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(hover: hover)').matches : false
-  );
   const periods = ['Mañana', 'Tarde', 'Noche'];
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const monthsShort = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -454,8 +449,8 @@ const CoParentingApp = () => {
       .map(t => ({ codigo: t.split(' ')[0].split('(')[0], esExtra: t.includes(' extra') }));
 
   // ---- Ampliar información de un día en mes/año ----
-  // PC: al pasar el ratón se amplía; al hacer clic se abre el día para editar
-  // Móvil: el primer toque amplía; el segundo toque sobre el mismo día abre el día para editar
+  // Un clic (o toque) amplía la información; un segundo clic sobre el mismo día
+  // abre la vista Día para poder editarlo. Funciona igual en PC y en móvil.
   const abrirDiaParaEditar = (date) => {
     setDiaDetalle(null);
     setBloqueActivoDia(0);
@@ -464,39 +459,11 @@ const CoParentingApp = () => {
   };
 
   const handleClickDia = (date) => {
-    if (soportaHover) { abrirDiaParaEditar(date); return; }
+    // El recuadro ampliado solo tiene información para el padre;
+    // el resto de usuarios van directamente al día
+    if (currentUser !== 'parent1') { abrirDiaParaEditar(date); return; }
     if (diaDetalle && formatDate(diaDetalle) === formatDate(date)) abrirDiaParaEditar(date);
     else setDiaDetalle(date);
-  };
-
-  const handleHoverDia = (date) => { if (soportaHover) setDiaDetalle(date); };
-  const handleSalirHoverDia = () => { if (soportaHover) setDiaDetalle(null); };
-
-  // Color de fondo de la custodia en el recuadro ampliado
-  const getColorCustodiaDetalle = (asignado) => {
-    if (!asignado) return '#f3f4f6';
-    if (asignado.startsWith('parent1_decision_')) return '#6b7280';
-    if (asignado.startsWith('parent2_decision_')) return '#000000';
-    if (asignado.includes('_pago')) return '#dc2626';
-    if (asignado.startsWith('parent1')) return 'rgba(59, 130, 246, 0.5)';
-    if (asignado.startsWith('parent2')) return '#FBBF24';
-    if (asignado.startsWith('other')) return '#f472b6';
-    return '#e5e7eb';
-  };
-
-  // Nombre de quien tiene la custodia en esa franja
-  const getNombreCuidador = (asignado) => {
-    if (!asignado) return '-';
-    if (asignado.includes('_decision_')) {
-      return asignado.startsWith('parent1')
-        ? `${parents.parent1 || 'Padre'} (decisión)`
-        : `${parents.parent2 || 'Madre'} (decisión)`;
-    }
-    if (asignado.includes('_pago')) return `${parents.parent2 || 'Madre'} (pago)`;
-    if (asignado.startsWith('parent1')) return parents.parent1 || 'Padre';
-    if (asignado.startsWith('parent2')) return parents.parent2 || 'Madre';
-    if (asignado.startsWith('other')) return parents.other || 'Otro';
-    return asignado;
   };
 
   // Parsear turno de la madre (formato: "Mañana|09:00|15:00;Tarde|17:00|21:00")
@@ -1447,8 +1414,6 @@ const CoParentingApp = () => {
         <div key={dateKey} 
           className="rounded flex flex-col overflow-hidden cursor-pointer"
           onClick={() => handleClickDia(date)}
-          onMouseEnter={() => handleHoverDia(date)}
-          onMouseLeave={handleSalirHoverDia}
           style={{ 
             border: today ? '2px solid black' : '1px solid #e5e7eb',
             minHeight: 55
@@ -1494,8 +1459,6 @@ const CoParentingApp = () => {
         <div key={dateKey} 
           className="rounded flex flex-col overflow-hidden cursor-pointer"
           onClick={() => handleClickDia(date)}
-          onMouseEnter={() => handleHoverDia(date)}
-          onMouseLeave={handleSalirHoverDia}
           style={{ 
             border: today ? '2px solid black' : '1px solid #e5e7eb',
             minHeight: 55
@@ -2890,8 +2853,6 @@ const CoParentingApp = () => {
                         <div key={`${monthIdx}-${date.getDate()}`} 
                           className="rounded-sm flex flex-col overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400"
                           onClick={() => handleClickDia(date)}
-                          onMouseEnter={() => handleHoverDia(date)}
-                          onMouseLeave={handleSalirHoverDia}
                           style={{ 
                             height: 32,
                             border: today ? '2px solid black' : '1px solid #e5e7eb'
@@ -3151,30 +3112,9 @@ const CoParentingApp = () => {
                 </div>
               )}
 
-              {/* Custodia por franjas */}
-              <div>
-                <div className="text-[9px] font-bold text-gray-500">Custodia</div>
-                {periods.map(period => (
-                  <div key={period} className="flex items-center gap-1 mb-0.5">
-                    <div className="w-12 shrink-0 text-[9px] font-bold">{period}</div>
-                    {['child1', 'child2'].map(ch => {
-                      const asignado = schedule[getScheduleKey(diaDetalle, ch, period)];
-                      const fondo = getColorCustodiaDetalle(asignado);
-                      const letraBlanca = asignado && (asignado.includes('_decision_') || asignado.includes('_pago'));
-                      return (
-                        <div key={ch} className="flex-1 min-w-0 text-[9px] font-bold text-center rounded px-1 py-0.5 truncate"
-                          style={{ backgroundColor: fondo, color: letraBlanca ? 'white' : '#000' }}>
-                          {(children[ch] || (ch === 'child1' ? 'H1' : 'H2'))}: {getNombreCuidador(asignado)}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))}
-              </div>
-
               {/* Aviso de cómo abrir el día para editarlo */}
               <div className="text-[9px] text-gray-400 text-center mt-1">
-                {soportaHover ? 'Haz clic en el día para editarlo' : 'Toca otra vez el mismo día para editarlo'}
+                Vuelve a hacer clic en el mismo día para editarlo
               </div>
             </div>
           </div>
