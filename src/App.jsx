@@ -1493,7 +1493,7 @@ const CoParentingApp = () => {
                   <span key={`t${i}`} className={`text-[8px] font-bold px-1 rounded leading-tight ${t.esExtra ? 'bg-red-600 text-white' : 'bg-white text-black'}`}>{t.codigo}</span>
                 ))}
                 {actividadesDia.map((a, i) => (
-                  <span key={`a${i}`} className="w-full text-left text-[7px] font-bold rounded px-[2px] leading-tight truncate"
+                  <span key={`a${i}`} className="w-full text-left text-[6px] font-bold rounded px-[2px] leading-tight truncate"
                     style={{ color: a.color, backgroundColor: a.fondo || 'rgba(255,255,255,0.85)' }}>
                     {a.textoVisible}
                   </span>
