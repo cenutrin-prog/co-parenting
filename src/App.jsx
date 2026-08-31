@@ -29,6 +29,12 @@ const CoParentingApp = () => {
   const [weekAssignOffset, setWeekAssignOffset] = useState(0); // Offset para vista de asignación semanal
   const [bloqueActivoDia, setBloqueActivoDia] = useState(0); // Bloque de turno/actividad que se ve en la vista Día
   const [bloquesExtraDia, setBloquesExtraDia] = useState({}); // Bloques añadidos con el botón "+" en la vista Día
+  const [diaDetalle, setDiaDetalle] = useState(null); // Día cuya información ampliada se está mostrando
+  // Si el dispositivo tiene ratón (PC), la información se amplía al pasar por encima;
+  // si es táctil (móvil), se amplía al primer toque
+  const [soportaHover] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(hover: hover)').matches : false
+  );
   const periods = ['Mañana', 'Tarde', 'Noche'];
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const monthsShort = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -399,33 +405,99 @@ const CoParentingApp = () => {
     return Math.max(1, nTurnos, nActividades, 1 + extra);
   };
 
-  // Etiqueta corta de cada actividad para los calendarios
+  // Etiqueta corta de cada actividad (solo se usa si no se ha escrito nada en el recuadro)
   const getEtiquetaActividad = (tipo) => {
-    if (tipo === 'MÁSTER') return 'MÁSTER';
+    if (tipo === 'MÁSTER') return 'MÁS';
     if (tipo === 'CURSO') return 'CUR';
-    if (tipo === 'F.O.') return 'FO';
+    if (tipo === 'F.O.') return 'F.O.';
     if (tipo === 'VIAJE') return 'VIA';
     if (tipo === 'OTRO') return 'OTR';
     return (tipo || '').substring(0, 3);
   };
 
-  // Lista de actividades de un día, ya preparadas para pintar (etiqueta + texto escrito)
+  // Código de colores de las actividades en los calendarios
+  // F.O. es el único que lleva fondo de color y muestra siempre su nombre
+  const estilosActividad = {
+    'CURSO':  { color: '#16a34a', fondo: null,      llevaNombre: false }, // verde
+    'MÁSTER': { color: '#dc2626', fondo: null,      llevaNombre: false }, // rojo
+    'F.O.':   { color: '#ffffff', fondo: '#16a34a', llevaNombre: true  }, // fondo verde, letra blanca
+    'VIAJE':  { color: '#2563eb', fondo: null,      llevaNombre: false }, // azul
+    'OTRO':   { color: '#000000', fondo: null,      llevaNombre: false }  // negro
+  };
+
+  // Lista de actividades de un día, ya preparadas para pintar
   const getActividadesParaCalendario = (fecha) =>
     getActividadesPadreDia(fecha)
       .map(parseActividadPadre)
       .filter(a => a.tipo || a.entrada || a.salida || a.textoOtro)
-      .map(a => ({
-        etiqueta: getEtiquetaActividad(a.tipo),
-        texto: a.textoOtro || '',
-        entrada: a.entrada || '',
-        salida: a.salida || ''
-      }));
+      .map(a => {
+        const estilo = estilosActividad[a.tipo] || { color: '#9333ea', fondo: null, llevaNombre: false };
+        const texto = a.textoOtro || '';
+        // F.O. muestra su nombre (y detrás lo escrito, si hay algo).
+        // El resto muestra solo lo escrito; si no hay nada escrito, su etiqueta corta como aviso
+        const textoVisible = estilo.llevaNombre
+          ? (texto ? `F.O. ${texto}` : 'F.O.')
+          : (texto || getEtiquetaActividad(a.tipo));
+        return {
+          textoVisible,
+          color: estilo.color,
+          fondo: estilo.fondo,
+          entrada: a.entrada || '',
+          salida: a.salida || ''
+        };
+      });
 
   // Lista de turnos de trabajo de un día, ya preparados para pintar
   const getTurnosParaCalendario = (fecha) =>
     getTurnosPadreDia(fecha)
       .filter(t => t)
       .map(t => ({ codigo: t.split(' ')[0].split('(')[0], esExtra: t.includes(' extra') }));
+
+  // ---- Ampliar información de un día en mes/año ----
+  // PC: al pasar el ratón se amplía; al hacer clic se abre el día para editar
+  // Móvil: el primer toque amplía; el segundo toque sobre el mismo día abre el día para editar
+  const abrirDiaParaEditar = (date) => {
+    setDiaDetalle(null);
+    setBloqueActivoDia(0);
+    setCurrentDate(date);
+    setCurrentView('daily');
+  };
+
+  const handleClickDia = (date) => {
+    if (soportaHover) { abrirDiaParaEditar(date); return; }
+    if (diaDetalle && formatDate(diaDetalle) === formatDate(date)) abrirDiaParaEditar(date);
+    else setDiaDetalle(date);
+  };
+
+  const handleHoverDia = (date) => { if (soportaHover) setDiaDetalle(date); };
+  const handleSalirHoverDia = () => { if (soportaHover) setDiaDetalle(null); };
+
+  // Color de fondo de la custodia en el recuadro ampliado
+  const getColorCustodiaDetalle = (asignado) => {
+    if (!asignado) return '#f3f4f6';
+    if (asignado.startsWith('parent1_decision_')) return '#6b7280';
+    if (asignado.startsWith('parent2_decision_')) return '#000000';
+    if (asignado.includes('_pago')) return '#dc2626';
+    if (asignado.startsWith('parent1')) return 'rgba(59, 130, 246, 0.5)';
+    if (asignado.startsWith('parent2')) return '#FBBF24';
+    if (asignado.startsWith('other')) return '#f472b6';
+    return '#e5e7eb';
+  };
+
+  // Nombre de quien tiene la custodia en esa franja
+  const getNombreCuidador = (asignado) => {
+    if (!asignado) return '-';
+    if (asignado.includes('_decision_')) {
+      return asignado.startsWith('parent1')
+        ? `${parents.parent1 || 'Padre'} (decisión)`
+        : `${parents.parent2 || 'Madre'} (decisión)`;
+    }
+    if (asignado.includes('_pago')) return `${parents.parent2 || 'Madre'} (pago)`;
+    if (asignado.startsWith('parent1')) return parents.parent1 || 'Padre';
+    if (asignado.startsWith('parent2')) return parents.parent2 || 'Madre';
+    if (asignado.startsWith('other')) return parents.other || 'Otro';
+    return asignado;
+  };
 
   // Parsear turno de la madre (formato: "Mañana|09:00|15:00;Tarde|17:00|21:00")
   const parseTurnoMadre = (turno) => {
@@ -615,12 +687,6 @@ const CoParentingApp = () => {
     const actividadActual = splitBloques(cadenaCompleta)[bloqueIdx] || '';
     const parsed = parseActividadPadre(actividadActual);
     const [textoLocal, setTextoLocal] = useState('');
-    const textoLocalRef = React.useRef(textoLocal);
-    
-    // Sincronizar ref con estado
-    useEffect(() => {
-      textoLocalRef.current = textoLocal;
-    }, [textoLocal]);
     
     // Inicializar texto local cuando cambia la fecha, el bloque o se carga de Supabase
     useEffect(() => {
@@ -636,18 +702,14 @@ const CoParentingApp = () => {
       }
     };
     
-    // Guardar con debounce de 800ms
-    useEffect(() => {
+    // Guardar el texto SOLO cuando se termina de escribir (al salir del recuadro o pulsar Intro),
+    // para que no se interrumpa la escritura
+    const guardarTexto = () => {
       if (!parsed.tipo) return;
-      if (textoLocal === parsed.textoOtro) return;
-      
-      const timer = setTimeout(() => {
-        const newActividad = buildActividadPadre(parsed.tipo, parsed.entrada, parsed.salida, limpiarTextoActividad(textoLocalRef.current));
-        guardarBloque(newActividad);
-      }, 800);
-      
-      return () => clearTimeout(timer);
-    }, [textoLocal]);
+      const textoLimpio = limpiarTextoActividad(textoLocal);
+      if (textoLimpio === parsed.textoOtro) return;
+      guardarBloque(buildActividadPadre(parsed.tipo, parsed.entrada, parsed.salida, textoLimpio));
+    };
 
     const updateActividad = (field, value) => {
       // Al cambiar el tipo se conserva el texto ya escrito; si se borra el tipo, se limpia
@@ -683,6 +745,8 @@ const CoParentingApp = () => {
             type="text" 
             value={textoLocal} 
             onChange={e => setTextoLocal(e.target.value)}
+            onBlur={guardarTexto}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } }}
             placeholder="Escribe aquí (p. ej. Londres)..."
             className="w-full text-[9px] p-1 border rounded"
           />
@@ -978,9 +1042,9 @@ const CoParentingApp = () => {
                         {listaActividades.length === 0 && <div className="text-[6px]">-</div>}
                         {listaActividades.map((a, i) => (
                           <div key={i}>
-                            <div className="flex items-center justify-start gap-[2px] overflow-hidden">
-                              <span className="text-[6px] font-bold shrink-0">{a.etiqueta}</span>
-                              {a.texto && <span className="text-[6px] font-bold truncate">{a.texto}</span>}
+                            <div className="text-left text-[6px] font-bold rounded px-[2px] truncate"
+                              style={{ color: a.color, backgroundColor: a.fondo || 'rgba(255,255,255,0.85)' }}>
+                              {a.textoVisible}
                             </div>
                             {(a.entrada || a.salida) && <div className="text-[5px]">{a.entrada || '?'}-{a.salida || '?'}</div>}
                           </div>
@@ -1184,9 +1248,9 @@ const CoParentingApp = () => {
                 {listaActividades.length === 0 && <div className="text-[6px]">-</div>}
                 {listaActividades.map((a, i) => (
                   <div key={i}>
-                    <div className="flex items-center justify-start gap-[2px] overflow-hidden">
-                      <span className="text-[6px] font-bold shrink-0">{a.etiqueta}</span>
-                      {a.texto && <span className="text-[6px] font-bold truncate">{a.texto}</span>}
+                    <div className="text-left text-[6px] font-bold rounded px-[2px] truncate"
+                      style={{ color: a.color, backgroundColor: a.fondo || 'rgba(255,255,255,0.85)' }}>
+                      {a.textoVisible}
                     </div>
                     {(a.entrada || a.salida) && <div className="text-[5px]">{a.entrada || '?'}-{a.salida || '?'}</div>}
                   </div>
@@ -1382,7 +1446,9 @@ const CoParentingApp = () => {
       return (
         <div key={dateKey} 
           className="rounded flex flex-col overflow-hidden cursor-pointer"
-          onClick={() => { setCurrentDate(date); setCurrentView('daily'); }}
+          onClick={() => handleClickDia(date)}
+          onMouseEnter={() => handleHoverDia(date)}
+          onMouseLeave={handleSalirHoverDia}
           style={{ 
             border: today ? '2px solid black' : '1px solid #e5e7eb',
             minHeight: 55
@@ -1427,7 +1493,9 @@ const CoParentingApp = () => {
       return (
         <div key={dateKey} 
           className="rounded flex flex-col overflow-hidden cursor-pointer"
-          onClick={() => { setCurrentDate(date); setCurrentView('daily'); }}
+          onClick={() => handleClickDia(date)}
+          onMouseEnter={() => handleHoverDia(date)}
+          onMouseLeave={handleSalirHoverDia}
           style={{ 
             border: today ? '2px solid black' : '1px solid #e5e7eb',
             minHeight: 55
@@ -1455,17 +1523,16 @@ const CoParentingApp = () => {
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedD) }} />
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedE) }} />
             </div>
-            {/* Turnos y actividades del día, uno debajo de otro */}
+            {/* Turnos (arriba del todo) y debajo las actividades, una por línea */}
             {(turnosDia.length > 0 || actividadesDia.length > 0) && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-[1px] px-[1px] pointer-events-none">
+              <div className="absolute inset-0 flex flex-col items-center justify-start gap-[1px] px-[1px] pointer-events-none">
                 {turnosDia.map((t, i) => (
                   <span key={`t${i}`} className={`text-[8px] font-bold px-1 rounded leading-tight ${t.esExtra ? 'bg-red-600 text-white' : 'bg-white text-black'}`}>{t.codigo}</span>
                 ))}
                 {actividadesDia.map((a, i) => (
-                  <span key={`a${i}`} className="w-full flex items-center justify-start gap-[2px] bg-white rounded px-[2px] leading-tight overflow-hidden"
-                    style={{ color: '#9333ea' }}>
-                    <span className="text-[7px] font-bold shrink-0">{a.etiqueta}</span>
-                    {a.texto && <span className="text-[6px] font-bold truncate">{a.texto}</span>}
+                  <span key={`a${i}`} className="w-full text-left text-[7px] font-bold rounded px-[2px] leading-tight truncate"
+                    style={{ color: a.color, backgroundColor: a.fondo || 'rgba(255,255,255,0.85)' }}>
+                    {a.textoVisible}
                   </span>
                 ))}
               </div>
@@ -2611,9 +2678,9 @@ const CoParentingApp = () => {
                           <div key={`t${i}`} className="text-[6px] font-bold text-right" style={{ color: colors.parent1 }}>{t.codigo}</div>
                         ))}
                         {actividadesDia.map((a, i) => (
-                          <div key={`a${i}`} className="flex items-center justify-start gap-[2px] overflow-hidden" style={{ color: '#9333ea' }}>
-                            <span className="text-[5px] font-bold shrink-0">{a.etiqueta}</span>
-                            {a.texto && <span className="text-[5px] font-bold truncate">{a.texto}</span>}
+                          <div key={`a${i}`} className="text-left text-[5px] font-bold rounded px-[2px] truncate"
+                            style={{ color: a.color, backgroundColor: a.fondo || 'transparent' }}>
+                            {a.textoVisible}
                           </div>
                         ))}
                       </div>
@@ -2822,7 +2889,9 @@ const CoParentingApp = () => {
                       return (
                         <div key={`${monthIdx}-${date.getDate()}`} 
                           className="rounded-sm flex flex-col overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400"
-                          onClick={() => { setCurrentDate(date); setCurrentView('daily'); }}
+                          onClick={() => handleClickDia(date)}
+                          onMouseEnter={() => handleHoverDia(date)}
+                          onMouseLeave={handleSalirHoverDia}
                           style={{ 
                             height: 32,
                             border: today ? '2px solid black' : '1px solid #e5e7eb'
@@ -2851,19 +2920,18 @@ const CoParentingApp = () => {
                               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedD) }} />
                               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedE) }} />
                             </div>
-                            {/* Turnos y actividades del padre, uno debajo de otro */}
+                            {/* Turnos (arriba del todo) y debajo las actividades, una por línea */}
                             {hayTurno && (
-                              <div className="absolute inset-0 flex flex-col items-center justify-center px-[1px] pointer-events-none" style={{ lineHeight: 1 }}>
+                              <div className="absolute inset-0 flex flex-col items-center justify-start px-[1px] pointer-events-none" style={{ lineHeight: 1 }}>
                                 {/* Turnos de trabajo - con recuadro */}
                                 {turnosDia.map((t, i) => (
                                   <span key={`t${i}`} className={`text-[4px] font-bold px-0.5 rounded ${t.esExtra ? 'bg-red-600 text-white' : 'bg-white/80 text-black'}`}>{t.codigo}</span>
                                 ))}
-                                {/* Actividades: etiqueta pegada a la izquierda y texto justo a su derecha */}
+                                {/* Actividades: solo lo escrito, con su color */}
                                 {actividadesDia.map((a, i) => (
-                                  <span key={`a${i}`} className="w-full flex items-center justify-start gap-[1px] bg-white/80 rounded px-[1px] overflow-hidden"
-                                    style={{ color: '#9333ea' }}>
-                                    <span className="text-[4px] font-bold shrink-0">{a.etiqueta}</span>
-                                    {a.texto && <span className="text-[4px] font-bold truncate">{a.texto}</span>}
+                                  <span key={`a${i}`} className="w-full text-left text-[4px] font-bold rounded px-[1px] truncate"
+                                    style={{ color: a.color, backgroundColor: a.fondo || 'rgba(255,255,255,0.85)' }}>
+                                    {a.textoVisible}
                                   </span>
                                 ))}
                               </div>
@@ -3033,6 +3101,85 @@ const CoParentingApp = () => {
         {currentView === 'motherMonth' && <MotherMonthView />}
         {currentView === 'stats' && <StatsView />}
       </div>
+      {/* Recuadro con la información ampliada del día (mes y año) */}
+      {diaDetalle && (() => {
+        const fechaKey = getTurnoKey(diaDetalle);
+        const listaTurnos = splitBloques(turnos[`${fechaKey}_padre`] || '').filter(t => t).map(parseTurnoPadre);
+        const listaActividades = getActividadesParaCalendario(fechaKey);
+        const nombreDia = daysOfWeek[diaDetalle.getDay() === 0 ? 6 : diaDetalle.getDay() - 1];
+        const esRojo = isRedDay(diaDetalle);
+        return (
+          <div className="fixed left-0 right-0 bottom-0 z-40 flex justify-center px-2 pb-2 pointer-events-none">
+            <div className="pointer-events-auto w-full max-w-md bg-white border-2 border-gray-300 rounded-lg shadow-xl p-2">
+              {/* Cabecera: fecha y botón de cerrar */}
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-xs font-bold" style={{ color: esRojo ? '#dc2626' : 'inherit' }}>
+                  {nombreDia} {diaDetalle.getDate()} {monthsShort[diaDetalle.getMonth()]} {diaDetalle.getFullYear()}
+                </div>
+                <button onClick={() => setDiaDetalle(null)}
+                  className="w-5 h-5 flex items-center justify-center border rounded text-xs font-bold leading-none text-gray-500">✕</button>
+              </div>
+
+              {/* Turnos de trabajo */}
+              {currentUser === 'parent1' && (
+                <div className="mb-1">
+                  <div className="text-[9px] font-bold text-gray-500">Turnos</div>
+                  {listaTurnos.length === 0 && <div className="text-[10px] text-gray-400">Sin turno</div>}
+                  {listaTurnos.map((t, i) => (
+                    <div key={i} className="text-[10px] font-bold" style={{ color: colors.parent1 }}>
+                      {t.codigo}{t.horario ? ` (${t.horario})` : ''}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Actividades, con su código de colores */}
+              {currentUser === 'parent1' && listaActividades.length > 0 && (
+                <div className="mb-1">
+                  <div className="text-[9px] font-bold text-gray-500">Actividades</div>
+                  {listaActividades.map((a, i) => (
+                    <div key={i} className="flex items-center gap-1">
+                      <span className="text-[10px] font-bold rounded px-1"
+                        style={{ color: a.color, backgroundColor: a.fondo || 'transparent' }}>
+                        {a.textoVisible}
+                      </span>
+                      {(a.entrada || a.salida) && (
+                        <span className="text-[9px] text-gray-500">{a.entrada || '?'} - {a.salida || '?'}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Custodia por franjas */}
+              <div>
+                <div className="text-[9px] font-bold text-gray-500">Custodia</div>
+                {periods.map(period => (
+                  <div key={period} className="flex items-center gap-1 mb-0.5">
+                    <div className="w-12 shrink-0 text-[9px] font-bold">{period}</div>
+                    {['child1', 'child2'].map(ch => {
+                      const asignado = schedule[getScheduleKey(diaDetalle, ch, period)];
+                      const fondo = getColorCustodiaDetalle(asignado);
+                      const letraBlanca = asignado && (asignado.includes('_decision_') || asignado.includes('_pago'));
+                      return (
+                        <div key={ch} className="flex-1 min-w-0 text-[9px] font-bold text-center rounded px-1 py-0.5 truncate"
+                          style={{ backgroundColor: fondo, color: letraBlanca ? 'white' : '#000' }}>
+                          {(children[ch] || (ch === 'child1' ? 'H1' : 'H2'))}: {getNombreCuidador(asignado)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+
+              {/* Aviso de cómo abrir el día para editarlo */}
+              <div className="text-[9px] text-gray-400 text-center mt-1">
+                {soportaHover ? 'Haz clic en el día para editarlo' : 'Toca otra vez el mismo día para editarlo'}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {popupObs && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setPopupObs(null)}>
           <div className="bg-white p-4 rounded-lg shadow-lg max-w-sm mx-4" onClick={e => e.stopPropagation()}>
