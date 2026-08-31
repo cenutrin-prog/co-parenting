@@ -27,6 +27,8 @@ const CoParentingApp = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaveStatus, setLastSaveStatus] = useState(null); // 'success', 'error', o null
   const [weekAssignOffset, setWeekAssignOffset] = useState(0); // Offset para vista de asignación semanal
+  const [bloqueActivoDia, setBloqueActivoDia] = useState(0); // Bloque de turno/actividad que se ve en la vista Día
+  const [bloquesExtraDia, setBloquesExtraDia] = useState({}); // Bloques añadidos con el botón "+" en la vista Día
   const periods = ['Mañana', 'Tarde', 'Noche'];
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const monthsShort = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -48,7 +50,7 @@ const CoParentingApp = () => {
   const turnosPadre = [...turnosPadreBase, ...turnosPadreExtra];
 
   // Tipos de actividad para el padre (segunda fila de desplegables)
-  const tiposActividadPadre = ['', 'CURSO', 'CLASE MÁSTER', 'F.O.', 'VIAJE', 'OTRO'];
+  const tiposActividadPadre = ['', 'CURSO', 'MÁSTER', 'F.O.', 'VIAJE', 'OTRO'];
   const horasEntradaPadre = ['', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00', '22:30', '23:00', '23:30', '00:00'];
   const horasSalidaPadre = ['', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00', '20:30', '21:00', '21:30', '22:00', '22:30', '23:00', '23:30', '00:00'];
 
@@ -342,11 +344,13 @@ const CoParentingApp = () => {
     return { codigo: turno, horario: '' };
   };
 
-  // Parsear actividad extra del padre (formato: "CURSO|09:00|15:00")
+  // Parsear actividad extra del padre (formato: "CURSO|09:00|15:00|texto")
   const parseActividadPadre = (actividad) => {
     if (!actividad) return { tipo: '', entrada: '', salida: '', textoOtro: '' };
     const [tipo, entrada, salida, textoOtro] = actividad.split('|');
-    return { tipo: tipo || '', entrada: entrada || '', salida: salida || '', textoOtro: textoOtro || '' };
+    // "CLASE MÁSTER" era el nombre antiguo; los datos ya guardados se leen como "MÁSTER"
+    const tipoNormalizado = tipo === 'CLASE MÁSTER' ? 'MÁSTER' : (tipo || '');
+    return { tipo: tipoNormalizado, entrada: entrada || '', salida: salida || '', textoOtro: textoOtro || '' };
   };
 
   // Construir string de actividad padre
@@ -354,6 +358,74 @@ const CoParentingApp = () => {
     if (!tipo && !entrada && !salida && !textoOtro) return '';
     return `${tipo || ''}|${entrada || ''}|${salida || ''}|${textoOtro || ''}`;
   };
+
+  // ---- Soporte para VARIOS bloques (turno + actividad) en un mismo día ----
+  // Los bloques se guardan en la misma casilla separados por ";;"
+  const SEP_BLOQUES = ';;';
+
+  // Separar el valor guardado en sus bloques
+  const splitBloques = (str) => {
+    if (!str) return [];
+    return str.split(SEP_BLOQUES);
+  };
+
+  // Sustituir el bloque nº idx dentro del valor guardado
+  const setBloqueEnCadena = (str, idx, valor) => {
+    const partes = splitBloques(str);
+    while (partes.length <= idx) partes.push('');
+    partes[idx] = valor;
+    // Quitar bloques vacíos que queden al final
+    while (partes.length > 1 && !partes[partes.length - 1]) partes.pop();
+    // Si no queda contenido real, dejar la casilla vacía
+    if (partes.every(p => !p || p.split('|').every(campo => !campo))) return '';
+    return partes.join(SEP_BLOQUES);
+  };
+
+  // Los caracteres "|" y ";" son separadores internos: si se escriben en el texto libre
+  // romperían el guardado, así que se sustituyen por equivalentes visuales
+  const limpiarTextoActividad = (texto) => (texto || '').replace(/\|/g, '/').replace(/;/g, ',');
+
+  // Lista de turnos de trabajo del padre de un día (puede haber más de uno)
+  const getTurnosPadreDia = (fecha) => splitBloques(turnos[`${fecha}_padre`] || '');
+
+  // Lista de actividades del padre de un día (puede haber más de una)
+  const getActividadesPadreDia = (fecha) => splitBloques(turnos[`${fecha}_padre_actividad`] || '');
+
+  // Cuántos bloques hay que mostrar en la vista Día para una fecha
+  const getNumBloquesDia = (fecha) => {
+    const nTurnos = getTurnosPadreDia(fecha).length;
+    const nActividades = getActividadesPadreDia(fecha).length;
+    const extra = bloquesExtraDia[fecha] || 0;
+    return Math.max(1, nTurnos, nActividades, 1 + extra);
+  };
+
+  // Etiqueta corta de cada actividad para los calendarios
+  const getEtiquetaActividad = (tipo) => {
+    if (tipo === 'MÁSTER') return 'MÁSTER';
+    if (tipo === 'CURSO') return 'CUR';
+    if (tipo === 'F.O.') return 'FO';
+    if (tipo === 'VIAJE') return 'VIA';
+    if (tipo === 'OTRO') return 'OTR';
+    return (tipo || '').substring(0, 3);
+  };
+
+  // Lista de actividades de un día, ya preparadas para pintar (etiqueta + texto escrito)
+  const getActividadesParaCalendario = (fecha) =>
+    getActividadesPadreDia(fecha)
+      .map(parseActividadPadre)
+      .filter(a => a.tipo || a.entrada || a.salida || a.textoOtro)
+      .map(a => ({
+        etiqueta: getEtiquetaActividad(a.tipo),
+        texto: a.textoOtro || '',
+        entrada: a.entrada || '',
+        salida: a.salida || ''
+      }));
+
+  // Lista de turnos de trabajo de un día, ya preparados para pintar
+  const getTurnosParaCalendario = (fecha) =>
+    getTurnosPadreDia(fecha)
+      .filter(t => t)
+      .map(t => ({ codigo: t.split(' ')[0].split('(')[0], esExtra: t.includes(' extra') }));
 
   // Parsear turno de la madre (formato: "Mañana|09:00|15:00;Tarde|17:00|21:00")
   const parseTurnoMadre = (turno) => {
@@ -537,9 +609,10 @@ const CoParentingApp = () => {
     }
   };
 
-  // Componente selector de actividad extra del padre (3 desplegables en 1 fila + campo texto para OTRO)
-  const ActividadPadreSelector = ({ fecha }) => {
-    const actividadActual = turnos[`${fecha}_padre_actividad`] || '';
+  // Componente selector de actividad extra del padre (3 desplegables en 1 fila + campo de texto libre)
+  const ActividadPadreSelector = ({ fecha, bloqueIdx = 0 }) => {
+    const cadenaCompleta = turnos[`${fecha}_padre_actividad`] || '';
+    const actividadActual = splitBloques(cadenaCompleta)[bloqueIdx] || '';
     const parsed = parseActividadPadre(actividadActual);
     const [textoLocal, setTextoLocal] = useState('');
     const textoLocalRef = React.useRef(textoLocal);
@@ -549,42 +622,43 @@ const CoParentingApp = () => {
       textoLocalRef.current = textoLocal;
     }, [textoLocal]);
     
-    // Inicializar texto local cuando cambia la fecha o se carga de Supabase
+    // Inicializar texto local cuando cambia la fecha, el bloque o se carga de Supabase
     useEffect(() => {
       setTextoLocal(parsed.textoOtro || '');
-    }, [fecha, actividadActual]);
+    }, [fecha, bloqueIdx, actividadActual]);
+    
+    // Guardar el bloque completo (turno/actividad) dentro de la cadena del día
+    const guardarBloque = (nuevoBloque) => {
+      const nuevaCadena = setBloqueEnCadena(turnos[`${fecha}_padre_actividad`] || '', bloqueIdx, nuevoBloque);
+      setTurnos(prev => ({ ...prev, [`${fecha}_padre_actividad`]: nuevaCadena }));
+      if (currentUser === 'parent1') {
+        saveOneTurno(fecha, 'padre_actividad', nuevaCadena);
+      }
+    };
     
     // Guardar con debounce de 800ms
     useEffect(() => {
-      if (parsed.tipo !== 'OTRO') return;
+      if (!parsed.tipo) return;
       if (textoLocal === parsed.textoOtro) return;
       
       const timer = setTimeout(() => {
-        const newActividad = buildActividadPadre(parsed.tipo, parsed.entrada, parsed.salida, textoLocalRef.current);
-        console.log('Guardando actividad con texto:', textoLocalRef.current, 'newActividad:', newActividad);
-        setTurnos(prev => ({ ...prev, [`${fecha}_padre_actividad`]: newActividad }));
-        if (currentUser === 'parent1') {
-          saveOneTurno(fecha, 'padre_actividad', newActividad);
-        }
+        const newActividad = buildActividadPadre(parsed.tipo, parsed.entrada, parsed.salida, limpiarTextoActividad(textoLocalRef.current));
+        guardarBloque(newActividad);
       }, 800);
       
       return () => clearTimeout(timer);
     }, [textoLocal]);
 
     const updateActividad = (field, value) => {
-      // Cuando cambia el tipo, preservar textoLocal si es OTRO
-      const textoParaGuardar = field === 'tipo' ? (value === 'OTRO' ? textoLocal : '') : textoLocal;
+      // Al cambiar el tipo se conserva el texto ya escrito; si se borra el tipo, se limpia
+      const textoParaGuardar = field === 'tipo' && !value ? '' : limpiarTextoActividad(textoLocal);
       const newActividad = buildActividadPadre(
         field === 'tipo' ? value : parsed.tipo,
         field === 'entrada' ? value : parsed.entrada,
         field === 'salida' ? value : parsed.salida,
         textoParaGuardar
       );
-      console.log('updateActividad:', field, value, 'newActividad:', newActividad);
-      setTurnos(prev => ({ ...prev, [`${fecha}_padre_actividad`]: newActividad }));
-      if (currentUser === 'parent1') {
-        saveOneTurno(fecha, 'padre_actividad', newActividad);
-      }
+      guardarBloque(newActividad);
     };
 
     const selectStyle = "w-full text-[9px] p-0.5 border rounded";
@@ -603,12 +677,13 @@ const CoParentingApp = () => {
             {horasSalidaPadre.map(h => <option key={h || 's'} value={h}>{h || '-'}</option>)}
           </select>
         </div>
-        {parsed.tipo === 'OTRO' && (
+        {/* Campo de texto libre: aparece con CUALQUIER actividad seleccionada */}
+        {parsed.tipo && (
           <input 
             type="text" 
             value={textoLocal} 
             onChange={e => setTextoLocal(e.target.value)}
-            placeholder="Escribe la actividad..."
+            placeholder="Escribe aquí (p. ej. Londres)..."
             className="w-full text-[9px] p-1 border rounded"
           />
         )}
@@ -674,15 +749,31 @@ const CoParentingApp = () => {
     const dayNum = currentDate.getDate();
     const monthName = monthsShort[currentDate.getMonth()];
     const turnoKey = getTurnoKey(currentDate);
-    const turnoPadre = turnos[`${turnoKey}_padre`] || '';
     const todayStyle = isToday(currentDate);
     const redDay = isRedDay(currentDate);
+
+    // Bloques de turno/actividad de este día y cuál se está viendo
+    const numBloques = getNumBloquesDia(turnoKey);
+    const bloqueVisible = Math.min(bloqueActivoDia, numBloques - 1);
+    const turnoPadre = splitBloques(turnos[`${turnoKey}_padre`] || '')[bloqueVisible] || '';
+
+    // Cambiar el turno de trabajo del bloque que se está viendo
+    const cambiarTurnoBloque = (valor) => {
+      const nuevaCadena = setBloqueEnCadena(turnos[`${turnoKey}_padre`] || '', bloqueVisible, valor);
+      handleTurnoChange(turnoKey, 'padre', nuevaCadena);
+    };
+
+    // Añadir un bloque nuevo y saltar a él
+    const anadirBloque = () => {
+      setBloquesExtraDia(prev => ({ ...prev, [turnoKey]: (prev[turnoKey] || 0) + 1 }));
+      setBloqueActivoDia(numBloques);
+    };
 
     return (
       <div className="p-2 flex flex-col h-full overflow-hidden">
         {/* Cabecera con navegación y botón Guardar */}
         <div className="flex justify-between items-center mb-2">
-          <button onClick={() => setCurrentDate(d => addDays(d, -1))} className="px-2 py-1 border rounded text-sm font-bold">◀</button>
+          <button onClick={() => { setBloqueActivoDia(0); setCurrentDate(d => addDays(d, -1)); }} className="px-2 py-1 border rounded text-sm font-bold">◀</button>
           <div className="flex flex-col items-center">
             {isParent1User && (
               <div className="flex items-center gap-1 mb-1">
@@ -704,25 +795,51 @@ const CoParentingApp = () => {
               {dayName} {dayNum} {monthName}
             </div>
           </div>
-          <button onClick={() => setCurrentDate(d => addDays(d, 1))} className="px-2 py-1 border rounded text-sm font-bold">▶</button>
+          <button onClick={() => { setBloqueActivoDia(0); setCurrentDate(d => addDays(d, 1)); }} className="px-2 py-1 border rounded text-sm font-bold">▶</button>
         </div>
         
         {/* Turnos de trabajo */}
         {(currentUser === 'parent1' || currentUser === 'parent2') && (
           <div className="mb-1 p-1.5 border rounded bg-gray-50">
-            <div className="text-[10px] font-bold mb-1">Turnos de trabajo</div>
+            {/* Cabecera: título a la izquierda y botón "+" a la derecha */}
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-[10px] font-bold">Turnos de trabajo</div>
+              {currentUser === 'parent1' && (
+                <button onClick={anadirBloque}
+                  title="Añadir otro turno o actividad a este día"
+                  className="w-5 h-5 flex items-center justify-center border rounded bg-white text-sm font-bold leading-none"
+                  style={{ color: colors.parent1, borderColor: colors.parent1 }}>+</button>
+              )}
+            </div>
             <div className="flex gap-2">
               {/* Turno del padre - SOLO visible para parent1 */}
               {currentUser === 'parent1' && (
-                <div className="flex-1">
-                  <div className="text-[10px] font-medium mb-0.5" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
-                  <select value={turnoPadre} onChange={e => handleTurnoChange(turnoKey, 'padre', e.target.value)}
-                    className="w-full text-[10px] p-0.5 border rounded"
-                    style={{ backgroundColor: turnoPadre ? colors.parent1 + '30' : 'white' }}>
-                    <option value="">Sin turno</option>
-                    {turnosPadre.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                  <ActividadPadreSelector fecha={turnoKey} />
+                <div className="flex-1 flex items-center gap-1">
+                  {/* Flecha izquierda (solo si hay más de un bloque) */}
+                  {numBloques > 1 && (
+                    <button onClick={() => setBloqueActivoDia(bloqueVisible > 0 ? bloqueVisible - 1 : numBloques - 1)}
+                      className="px-1 py-2 border rounded bg-white text-xs font-bold shrink-0">◀</button>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-0.5">
+                      <div className="text-[10px] font-medium" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
+                      {numBloques > 1 && (
+                        <div className="text-[9px] font-bold text-gray-500">{bloqueVisible + 1} / {numBloques}</div>
+                      )}
+                    </div>
+                    <select value={turnoPadre} onChange={e => cambiarTurnoBloque(e.target.value)}
+                      className="w-full text-[10px] p-0.5 border rounded"
+                      style={{ backgroundColor: turnoPadre ? colors.parent1 + '30' : 'white' }}>
+                      <option value="">Sin turno</option>
+                      {turnosPadre.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <ActividadPadreSelector fecha={turnoKey} bloqueIdx={bloqueVisible} />
+                  </div>
+                  {/* Flecha derecha (solo si hay más de un bloque) */}
+                  {numBloques > 1 && (
+                    <button onClick={() => setBloqueActivoDia(bloqueVisible < numBloques - 1 ? bloqueVisible + 1 : 0)}
+                      className="px-1 py-2 border rounded bg-white text-xs font-bold shrink-0">▶</button>
+                  )}
                 </div>
               )}
             </div>
@@ -831,12 +948,19 @@ const CoParentingApp = () => {
                   <div className="font-bold text-[7px] flex items-center" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
                   {weekDates.map((d) => {
                     const turnoKey = getTurnoKey(d);
-                    const turno = turnos[`${turnoKey}_padre`] || '';
-                    const { codigo, horario } = parseTurnoPadre(turno);
+                    const listaTurnos = splitBloques(turnos[`${turnoKey}_padre`] || '').filter(t => t);
                     return (
-                      <div key={`tp_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: turno ? colors.parent1 + '40' : '#f3f4f6', color: colors.parent1 }}>
-                        <div className="text-[7px] font-bold">{codigo}</div>
-                        {horario && <div className="text-[5px]">{horario}</div>}
+                      <div key={`tp_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: listaTurnos.length ? colors.parent1 + '40' : '#f3f4f6', color: colors.parent1 }}>
+                        {listaTurnos.length === 0 && <div className="text-[7px] font-bold">-</div>}
+                        {listaTurnos.map((turno, i) => {
+                          const { codigo, horario } = parseTurnoPadre(turno);
+                          return (
+                            <div key={i}>
+                              <div className="text-[7px] font-bold">{codigo}</div>
+                              {horario && <div className="text-[5px]">{horario}</div>}
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })}
@@ -848,27 +972,19 @@ const CoParentingApp = () => {
                   <div className="font-bold text-[6px] flex items-center" style={{ color: '#9333ea' }}>Actividad</div>
                   {weekDates.map((d) => {
                     const turnoKey = getTurnoKey(d);
-                    const actividad = turnos[`${turnoKey}_padre_actividad`] || '';
-                    const parsed = parseActividadPadre(actividad);
-                    const tieneActividad = parsed.tipo || parsed.entrada || parsed.salida;
-                    // Abreviar el tipo de actividad
-                    const tipoCorto = parsed.tipo ? (
-                      parsed.tipo === 'CLASE MÁSTER' ? 'MÁSTER' : 
-                      parsed.tipo === 'CURSO' ? 'CURSO' : 
-                      parsed.tipo === 'F.O.' ? 'F.O.' : 
-                      parsed.tipo === 'VIAJE' ? 'VIAJE' : 
-                      parsed.tipo === 'OTRO' ? (parsed.textoOtro || 'OTRO') : parsed.tipo
-                    ) : '';
+                    const listaActividades = getActividadesParaCalendario(turnoKey);
                     return (
-                      <div key={`act_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: tieneActividad ? '#9333ea30' : '#f3f4f6', color: '#9333ea' }}>
-                        {tieneActividad ? (
-                          <>
-                            <div className="text-[6px] font-bold">{tipoCorto}</div>
-                            {(parsed.entrada || parsed.salida) && <div className="text-[5px]">{parsed.entrada || '?'}-{parsed.salida || '?'}</div>}
-                          </>
-                        ) : (
-                          <div className="text-[6px]">-</div>
-                        )}
+                      <div key={`act_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: listaActividades.length ? '#9333ea30' : '#f3f4f6', color: '#9333ea' }}>
+                        {listaActividades.length === 0 && <div className="text-[6px]">-</div>}
+                        {listaActividades.map((a, i) => (
+                          <div key={i}>
+                            <div className="flex items-center justify-start gap-[2px] overflow-hidden">
+                              <span className="text-[6px] font-bold shrink-0">{a.etiqueta}</span>
+                              {a.texto && <span className="text-[6px] font-bold truncate">{a.texto}</span>}
+                            </div>
+                            {(a.entrada || a.salida) && <div className="text-[5px]">{a.entrada || '?'}-{a.salida || '?'}</div>}
+                          </div>
+                        ))}
                       </div>
                     );
                   })}
@@ -1041,12 +1157,19 @@ const CoParentingApp = () => {
           <div className="font-bold text-[7px] flex items-center" style={{ color: colors.parent1 }}>{parents.parent1 || 'Padre'}</div>
           {weekDates.map((d) => {
             const turnoKey = getTurnoKey(d);
-            const turno = turnos[`${turnoKey}_padre`] || '';
-            const { codigo, horario } = parseTurnoPadre(turno);
+            const listaTurnos = splitBloques(turnos[`${turnoKey}_padre`] || '').filter(t => t);
             return (
-              <div key={`tp_m_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: turno ? colors.parent1 + '40' : '#f3f4f6', color: colors.parent1 }}>
-                <div className="text-[7px] font-bold">{codigo}</div>
-                {horario && <div className="text-[5px]">{horario}</div>}
+              <div key={`tp_m_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: listaTurnos.length ? colors.parent1 + '40' : '#f3f4f6', color: colors.parent1 }}>
+                {listaTurnos.length === 0 && <div className="text-[7px] font-bold">-</div>}
+                {listaTurnos.map((turno, i) => {
+                  const { codigo, horario } = parseTurnoPadre(turno);
+                  return (
+                    <div key={i}>
+                      <div className="text-[7px] font-bold">{codigo}</div>
+                      {horario && <div className="text-[5px]">{horario}</div>}
+                    </div>
+                  );
+                })}
               </div>
             );
           })}
@@ -1055,26 +1178,19 @@ const CoParentingApp = () => {
           <div className="font-bold text-[6px] flex items-center" style={{ color: '#9333ea' }}>Actividad</div>
           {weekDates.map((d) => {
             const turnoKey = getTurnoKey(d);
-            const actividad = turnos[`${turnoKey}_padre_actividad`] || '';
-            const parsed = parseActividadPadre(actividad);
-            const tieneActividad = parsed.tipo || parsed.entrada || parsed.salida;
-            const tipoCorto = parsed.tipo ? (
-              parsed.tipo === 'CLASE MÁSTER' ? 'MÁSTER' : 
-              parsed.tipo === 'CURSO' ? 'CURSO' : 
-              parsed.tipo === 'F.O.' ? 'F.O.' : 
-              parsed.tipo === 'VIAJE' ? 'VIAJE' : 
-              parsed.tipo === 'OTRO' ? (parsed.textoOtro || 'OTRO') : parsed.tipo
-            ) : '';
+            const listaActividades = getActividadesParaCalendario(turnoKey);
             return (
-              <div key={`act_m_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: tieneActividad ? '#9333ea30' : '#f3f4f6', color: '#9333ea' }}>
-                {tieneActividad ? (
-                  <>
-                    <div className="text-[6px] font-bold">{tipoCorto}</div>
-                    {(parsed.entrada || parsed.salida) && <div className="text-[5px]">{parsed.entrada || '?'}-{parsed.salida || '?'}</div>}
-                  </>
-                ) : (
-                  <div className="text-[6px]">-</div>
-                )}
+              <div key={`act_m_${formatDate(d)}`} className="text-center rounded p-0.5" style={{ backgroundColor: listaActividades.length ? '#9333ea30' : '#f3f4f6', color: '#9333ea' }}>
+                {listaActividades.length === 0 && <div className="text-[6px]">-</div>}
+                {listaActividades.map((a, i) => (
+                  <div key={i}>
+                    <div className="flex items-center justify-start gap-[2px] overflow-hidden">
+                      <span className="text-[6px] font-bold shrink-0">{a.etiqueta}</span>
+                      {a.texto && <span className="text-[6px] font-bold truncate">{a.texto}</span>}
+                    </div>
+                    {(a.entrada || a.salida) && <div className="text-[5px]">{a.entrada || '?'}-{a.salida || '?'}</div>}
+                  </div>
+                ))}
               </div>
             );
           })}
@@ -1205,29 +1321,6 @@ const CoParentingApp = () => {
       return getColorForAssigned(assigned);
     };
 
-    // Obtener código corto del turno del padre
-    const getTurnoCorto = (turnoStr) => {
-      if (!turnoStr) return '';
-      const esExtra = turnoStr.includes(' extra');
-      const codigo = turnoStr.split(' ')[0].split('(')[0];
-      return { codigo, esExtra };
-    };
-
-    // Obtener actividad del padre
-    const getActividadInfo = (actividadStr) => {
-      if (!actividadStr) return null;
-      const parsed = parseActividadPadre(actividadStr);
-      if (!parsed.tipo) return null;
-      let tipoCorto = '';
-      if (parsed.tipo === 'CLASE MÁSTER') tipoCorto = 'MÁS';
-      else if (parsed.tipo === 'CURSO') tipoCorto = 'CUR';
-      else if (parsed.tipo === 'F.O.') tipoCorto = 'FO';
-      else if (parsed.tipo === 'VIAJE') tipoCorto = 'VIA';
-      else if (parsed.tipo === 'OTRO') tipoCorto = parsed.textoOtro || 'OTR';
-      else tipoCorto = parsed.tipo.substring(0, 3);
-      return { tipo: tipoCorto, entrada: parsed.entrada || '', salida: parsed.salida || '', esTextoPersonalizado: parsed.tipo === 'OTRO' && parsed.textoOtro };
-    };
-
     // Generar semanas continuas de todo el año actual
     const generateYearWeeks = () => {
       const weeks = [];
@@ -1328,12 +1421,8 @@ const CoParentingApp = () => {
       const nAssignedE = schedule[nKeyE];
       
       const turnoKey = getTurnoKey(date);
-      const turnoPadre = turnos[`${turnoKey}_padre`] || '';
-      const actividadPadre = turnos[`${turnoKey}_padre_actividad`] || '';
-      const turnoInfo = getTurnoCorto(turnoPadre);
-      const turnoCorto = turnoInfo.codigo;
-      const esExtra = turnoInfo.esExtra;
-      const actividadInfo = getActividadInfo(actividadPadre);
+      const turnosDia = getTurnosParaCalendario(turnoKey);
+      const actividadesDia = getActividadesParaCalendario(turnoKey);
       
       return (
         <div key={dateKey} 
@@ -1350,48 +1439,37 @@ const CoParentingApp = () => {
           </div>
           
           {/* 6 rectángulos: 3 filas x 2 columnas */}
-          <div className="flex-1 flex flex-col">
-            {/* Fila Mañana - con turno superpuesto en parte superior */}
-            <div className="flex-1 flex relative">
+          <div className="flex-1 flex flex-col relative">
+            {/* Fila Mañana */}
+            <div className="flex-1 flex">
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(mAssignedD) }} />
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(mAssignedE) }} />
-              {/* Turno en franja mañana - ajustado a las letras */}
-              {turnoCorto && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className={`text-[8px] font-bold px-1 rounded leading-tight ${esExtra ? 'bg-red-600 text-white' : 'bg-white text-black'}`}>{turnoCorto}</span>
-                </div>
-              )}
-              {/* Si solo hay actividad (sin turno), mostrarla aquí */}
-              {actividadInfo && !turnoCorto && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  {actividadInfo.esTextoPersonalizado ? (
-                    <span className="text-[5px] font-bold leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
-                  ) : (
-                    <span className="text-[8px] font-bold bg-white px-1 rounded leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
-                  )}
-                </div>
-              )}
             </div>
-            {/* Fila Tarde - con actividad superpuesta si hay turno */}
-            <div className="flex-1 flex relative">
+            {/* Fila Tarde */}
+            <div className="flex-1 flex">
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(tAssignedD) }} />
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(tAssignedE) }} />
-              {/* Actividad debajo del turno */}
-              {actividadInfo && turnoCorto && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  {actividadInfo.esTextoPersonalizado ? (
-                    <span className="text-[5px] font-bold leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
-                  ) : (
-                    <span className="text-[7px] font-bold bg-white px-1 rounded leading-tight" style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
-                  )}
-                </div>
-              )}
             </div>
             {/* Fila Noche */}
             <div className="flex-1 flex">
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedD) }} />
               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedE) }} />
             </div>
+            {/* Turnos y actividades del día, uno debajo de otro */}
+            {(turnosDia.length > 0 || actividadesDia.length > 0) && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-[1px] px-[1px] pointer-events-none">
+                {turnosDia.map((t, i) => (
+                  <span key={`t${i}`} className={`text-[8px] font-bold px-1 rounded leading-tight ${t.esExtra ? 'bg-red-600 text-white' : 'bg-white text-black'}`}>{t.codigo}</span>
+                ))}
+                {actividadesDia.map((a, i) => (
+                  <span key={`a${i}`} className="w-full flex items-center justify-start gap-[2px] bg-white rounded px-[2px] leading-tight overflow-hidden"
+                    style={{ color: '#9333ea' }}>
+                    <span className="text-[7px] font-bold shrink-0">{a.etiqueta}</span>
+                    {a.texto && <span className="text-[6px] font-bold truncate">{a.texto}</span>}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       );
@@ -1717,11 +1795,9 @@ const CoParentingApp = () => {
     );
 
     // Calcular horas de un turno dado el código
+    // (un día puede tener varios turnos, así que se suman todos)
     const calcularHorasTurnoPadre = (turnoStr) => {
       if (!turnoStr) return 0;
-      
-      // Extraer solo el código del turno (sin horario entre paréntesis)
-      const codigo = turnoStr.split(' ')[0].split('(')[0].toUpperCase();
       
       // Mapa de horas por código de turno
       const horasPorTurno = {
@@ -1746,7 +1822,13 @@ const CoParentingApp = () => {
         'GL': 24
       };
       
-      return horasPorTurno[codigo] || 0;
+      // Sumar las horas de todos los turnos que tenga ese día
+      return splitBloques(turnoStr)
+        .filter(t => t)
+        .reduce((total, t) => {
+          const codigo = t.split(' ')[0].split('(')[0].toUpperCase();
+          return total + (horasPorTurno[codigo] || 0);
+        }, 0);
     };
 
     // Calcular horas de turno de la madre desde el string guardado
@@ -2466,28 +2548,6 @@ const CoParentingApp = () => {
       return '#e5e7eb';
     };
     
-    // Obtener código corto del turno del padre (sin horario)
-    const getTurnoCorto = (turnoStr) => {
-      if (!turnoStr) return '';
-      // Extraer solo el código (antes del paréntesis o espacio)
-      const codigo = turnoStr.split(' ')[0].split('(')[0];
-      return codigo;
-    };
-    
-    // Obtener actividad del padre (CURSO, MÁSTER, etc.)
-    const getActividadCorta = (actividadStr) => {
-      if (!actividadStr) return '';
-      const parsed = parseActividadPadre(actividadStr);
-      if (!parsed.tipo) return '';
-      // Abreviar
-      if (parsed.tipo === 'CLASE MÁSTER') return 'MÁS';
-      if (parsed.tipo === 'CURSO') return 'CUR';
-      if (parsed.tipo === 'F.O.') return 'FO';
-      if (parsed.tipo === 'VIAJE') return 'VIA';
-      if (parsed.tipo === 'OTRO') return parsed.textoOtro || 'OTR';
-      return parsed.tipo.substring(0, 3);
-    };
-
     return (
       <div className="p-2">
         <div className="flex items-center justify-between mb-2">
@@ -2529,12 +2589,10 @@ const CoParentingApp = () => {
               const today = isToday(date);
               const redDay = isRedDay(date);
               
-              // Obtener turnos de trabajo
+              // Obtener turnos de trabajo y actividades (puede haber varios)
               const turnoKey = getTurnoKey(date);
-              const turnoPadre = turnos[`${turnoKey}_padre`] || '';
-              const actividadPadre = turnos[`${turnoKey}_padre_actividad`] || '';
-              const turnoCorto = getTurnoCorto(turnoPadre);
-              const actividadCorta = getActividadCorta(actividadPadre);
+              const turnosDia = getTurnosParaCalendario(turnoKey);
+              const actividadesDia = getActividadesParaCalendario(turnoKey);
 
               return (
                 <div key={dateKey} 
@@ -2548,13 +2606,16 @@ const CoParentingApp = () => {
                     </span>
                     {/* Turno y actividad - SOLO visible para parent1 */}
                     {currentUser === 'parent1' && (
-                      <div className="text-right" style={{ lineHeight: 1 }}>
-                        {turnoCorto && (
-                          <div className="text-[6px] font-bold" style={{ color: colors.parent1 }}>{turnoCorto}</div>
-                        )}
-                        {actividadCorta && (
-                          <div className="text-[5px] font-bold" style={{ color: '#9333ea' }}>{actividadCorta}</div>
-                        )}
+                      <div className="min-w-0 flex-1 ml-0.5" style={{ lineHeight: 1 }}>
+                        {turnosDia.map((t, i) => (
+                          <div key={`t${i}`} className="text-[6px] font-bold text-right" style={{ color: colors.parent1 }}>{t.codigo}</div>
+                        ))}
+                        {actividadesDia.map((a, i) => (
+                          <div key={`a${i}`} className="flex items-center justify-start gap-[2px] overflow-hidden" style={{ color: '#9333ea' }}>
+                            <span className="text-[5px] font-bold shrink-0">{a.etiqueta}</span>
+                            {a.texto && <span className="text-[5px] font-bold truncate">{a.texto}</span>}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -2666,37 +2727,6 @@ const CoParentingApp = () => {
       return dates;
     };
     
-    // Obtener código corto del turno del padre (sin horario)
-    const getTurnoCorto = (turnoStr) => {
-      if (!turnoStr) return { codigo: '', esExtra: false };
-      const esExtra = turnoStr.includes(' extra');
-      const codigo = turnoStr.split(' ')[0].split('(')[0];
-      return { codigo, esExtra };
-    };
-    
-    // Obtener actividad del padre con formato corto
-    const getActividadInfo = (actividadStr) => {
-      if (!actividadStr) return null;
-      const parsed = parseActividadPadre(actividadStr);
-      if (!parsed.tipo) return null;
-      
-      // Abreviar el tipo de actividad
-      let tipoCorto = '';
-      if (parsed.tipo === 'CLASE MÁSTER') tipoCorto = 'MÁS';
-      else if (parsed.tipo === 'CURSO') tipoCorto = 'CUR';
-      else if (parsed.tipo === 'F.O.') tipoCorto = 'FO';
-      else if (parsed.tipo === 'VIAJE') tipoCorto = 'VIA';
-      else if (parsed.tipo === 'OTRO') tipoCorto = parsed.textoOtro || 'OTR';
-      else tipoCorto = parsed.tipo.substring(0, 3);
-      
-      return {
-        tipo: tipoCorto,
-        entrada: parsed.entrada || '',
-        salida: parsed.salida || '',
-        esTextoPersonalizado: parsed.tipo === 'OTRO' && parsed.textoOtro
-      };
-    };
-
     return (
       <div className="p-2 h-full flex flex-col overflow-hidden">
         {/* Cabecera con año y navegación */}
@@ -2778,20 +2808,16 @@ const CoParentingApp = () => {
                       const tAssignedE = schedule[tKeyE];
                       const nAssignedE = schedule[nKeyE];
                       
-                      // Obtener turno de trabajo y actividad
+                      // Obtener turnos de trabajo y actividades (puede haber varios)
                       const turnoKey = getTurnoKey(date);
-                      const turnoPadre = turnos[`${turnoKey}_padre`] || '';
-                      const actividadPadre = turnos[`${turnoKey}_padre_actividad`] || '';
-                      const turnoInfo = getTurnoCorto(turnoPadre);
-                      const turnoCorto = turnoInfo.codigo;
-                      const esExtra = turnoInfo.esExtra;
-                      const actividadInfo = getActividadInfo(actividadPadre);
+                      const turnosDia = getTurnosParaCalendario(turnoKey);
+                      const actividadesDia = getActividadesParaCalendario(turnoKey);
                       
                       const today = isToday(date);
                       const redDay = isRedDay(date);
                       
                       // Determinar si hay turno o actividad para mostrar
-                      const hayTurno = turnoCorto || actividadInfo;
+                      const hayTurno = turnosDia.length > 0 || actividadesDia.length > 0;
                       
                       return (
                         <div key={`${monthIdx}-${date.getDate()}`} 
@@ -2825,34 +2851,21 @@ const CoParentingApp = () => {
                               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedD) }} />
                               <div className="flex-1" style={{ backgroundColor: getColorWithSpecial(nAssignedE) }} />
                             </div>
-                            {/* Turno y/o Actividad del padre centrado */}
+                            {/* Turnos y actividades del padre, uno debajo de otro */}
                             {hayTurno && (
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <div style={{ lineHeight: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                  {/* Turno de trabajo - con recuadro */}
-                                  {turnoCorto && (
-                                    <span className={`text-[4px] font-bold px-0.5 rounded ${esExtra ? 'bg-red-600 text-white' : 'bg-white/80 text-black'}`}>{turnoCorto}</span>
-                                  )}
-                                  {/* Actividad (MÁSTER, CURSO, etc.) - sin recuadro */}
-                                  {actividadInfo && (
-                                    <>
-                                      <span className={actividadInfo.esTextoPersonalizado ? 'text-[3px]' : 'text-[3px] font-bold'} style={{ color: '#9333ea' }}>{actividadInfo.tipo}</span>
-                                      {(actividadInfo.entrada || actividadInfo.salida) && !actividadInfo.esTextoPersonalizado && (
-                                        <span className="text-[3px]" style={{ color: '#9333ea' }}>
-                                          {actividadInfo.entrada && actividadInfo.salida 
-                                            ? `${actividadInfo.entrada}-${actividadInfo.salida}`
-                                            : (
-                                              <>
-                                                {actividadInfo.entrada && <span>{actividadInfo.entrada}</span>}
-                                                {actividadInfo.salida && <span>{actividadInfo.salida}</span>}
-                                              </>
-                                            )
-                                          }
-                                        </span>
-                                      )}
-                                    </>
-                                  )}
-                                </div>
+                              <div className="absolute inset-0 flex flex-col items-center justify-center px-[1px] pointer-events-none" style={{ lineHeight: 1 }}>
+                                {/* Turnos de trabajo - con recuadro */}
+                                {turnosDia.map((t, i) => (
+                                  <span key={`t${i}`} className={`text-[4px] font-bold px-0.5 rounded ${t.esExtra ? 'bg-red-600 text-white' : 'bg-white/80 text-black'}`}>{t.codigo}</span>
+                                ))}
+                                {/* Actividades: etiqueta pegada a la izquierda y texto justo a su derecha */}
+                                {actividadesDia.map((a, i) => (
+                                  <span key={`a${i}`} className="w-full flex items-center justify-start gap-[1px] bg-white/80 rounded px-[1px] overflow-hidden"
+                                    style={{ color: '#9333ea' }}>
+                                    <span className="text-[4px] font-bold shrink-0">{a.etiqueta}</span>
+                                    {a.texto && <span className="text-[4px] font-bold truncate">{a.texto}</span>}
+                                  </span>
+                                ))}
                               </div>
                             )}
                           </div>
