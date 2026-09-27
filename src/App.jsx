@@ -428,7 +428,7 @@ const CoParentingApp = () => {
   // Lista de actividades de un día, ya preparadas para pintar
   const getActividadesParaCalendario = (fecha) =>
     getActividadesPadreDia(fecha)
-      .map(parseActividadPadre)
+      .map((cadena, idx) => ({ ...parseActividadPadre(cadena), idx }))
       .filter(a => a.tipo || a.entrada || a.salida || a.textoOtro)
       .map(a => {
         const estilo = estilosActividad[a.tipo] || { color: '#9333ea', fondo: null, llevaNombre: false };
@@ -439,6 +439,7 @@ const CoParentingApp = () => {
           ? (texto ? `F.O. ${texto}` : 'F.O.')
           : (texto || getEtiquetaActividad(a.tipo));
         return {
+          idx: a.idx,
           textoVisible,
           color: estilo.color,
           fondo: estilo.fondo,
@@ -639,10 +640,10 @@ const CoParentingApp = () => {
 
   // Guardar en Supabase TODO lo de un día (turno, actividad y turno madre) de una sola vez,
   // tomando los valores que hay ahora mismo en pantalla
-  const saveTurnoDia = async (fecha) => {
+  const saveTurnoDia = async (fecha, valoresNuevos = null) => {
     try {
-      const padre = turnos[`${fecha}_padre`] || '';
-      const actividad = turnos[`${fecha}_padre_actividad`] || '';
+      const padre = valoresNuevos ? valoresNuevos.padre : (turnos[`${fecha}_padre`] || '');
+      const actividad = valoresNuevos ? valoresNuevos.actividad : (turnos[`${fecha}_padre_actividad`] || '');
       const madre = turnos[`${fecha}_madre`] || '';
       const turnoPadreCompleto = actividad ? `${padre}||${actividad}` : padre;
 
@@ -666,6 +667,43 @@ const CoParentingApp = () => {
     } catch (err) {
       console.error('Error en saveTurnoDia:', err);
       return false;
+    }
+  };
+
+  // Borrar UN turno o UNA actividad de un día (papelera del recuadro de detalle).
+  // Se guarda al momento, porque en Mes y Año no hay botón de guardar.
+  const borrarDelDia = async (fecha, que, idx, descripcion) => {
+    if (!window.confirm(`¿Borrar "${descripcion}"?`)) return;
+    const listaT = splitBloques(turnos[`${fecha}_padre`] || '');
+    const listaA = splitBloques(turnos[`${fecha}_padre_actividad`] || '');
+    const largo = Math.max(listaT.length, listaA.length);
+    while (listaT.length < largo) listaT.push('');
+    while (listaA.length < largo) listaA.push('');
+    if (que === 'turno') listaT[idx] = ''; else listaA[idx] = '';
+    // Si ese bloque se queda sin turno y sin actividad, se quita del todo
+    if (!listaT[idx] && !(listaA[idx] || '').split('|').some(c => c)) {
+      listaT.splice(idx, 1);
+      listaA.splice(idx, 1);
+    }
+    const limpiar = (lista) => {
+      while (lista.length > 0 && !(lista[lista.length - 1] || '').split('|').some(c => c)) lista.pop();
+      return lista.some(b => (b || '').split('|').some(c => c)) ? lista.join(SEP_BLOQUES) : '';
+    };
+    const nuevoPadre = limpiar(listaT);
+    const nuevaActividad = limpiar(listaA);
+    setTurnos(prev => ({ ...prev, [`${fecha}_padre`]: nuevoPadre, [`${fecha}_padre_actividad`]: nuevaActividad }));
+    setBloqueActivoDia(0);
+    setBloquesExtraDia(prev => ({ ...prev, [fecha]: 0 }));
+    if (currentUser === 'parent1') {
+      const ok = await saveTurnoDia(fecha, { padre: nuevoPadre, actividad: nuevaActividad });
+      if (ok) {
+        setTurnosPendientes(prev => { const n = { ...prev }; delete n[fecha]; return n; });
+        setLastSaveStatus('success');
+        setTimeout(() => setLastSaveStatus(null), 2000);
+      } else {
+        setLastSaveStatus('error');
+        alert('No se ha podido borrar. Pulsa Recargar e inténtalo de nuevo.');
+      }
     }
   };
 
@@ -3137,7 +3175,14 @@ const CoParentingApp = () => {
       {/* Recuadro con la información ampliada del día (mes y año) */}
       {diaDetalle && (() => {
         const fechaKey = getTurnoKey(diaDetalle);
-        const listaTurnos = splitBloques(turnos[`${fechaKey}_padre`] || '').filter(t => t).map(parseTurnoPadre);
+        const listaTurnos = splitBloques(turnos[`${fechaKey}_padre`] || '')
+          .map((t, idx) => ({ ...parseTurnoPadre(t), idx, vacio: !t }))
+          .filter(t => !t.vacio);
+        // Botón papelera (grande para poder pulsarlo bien en el móvil)
+        const Papelera = ({ onClick }) => (
+          <button onClick={onClick} title="Borrar"
+            className="ml-auto w-7 h-6 flex items-center justify-center border border-red-300 rounded bg-red-50 text-sm leading-none shrink-0">🗑️</button>
+        );
         const listaActividades = getActividadesParaCalendario(fechaKey);
         const nombreDia = daysOfWeek[diaDetalle.getDay() === 0 ? 6 : diaDetalle.getDay() - 1];
         const esRojo = isRedDay(diaDetalle);
@@ -3159,8 +3204,11 @@ const CoParentingApp = () => {
                   <div className="text-[9px] font-bold text-gray-500">Turnos</div>
                   {listaTurnos.length === 0 && <div className="text-[10px] text-gray-400">Sin turno</div>}
                   {listaTurnos.map((t, i) => (
-                    <div key={i} className="text-[10px] font-bold" style={{ color: colors.parent1 }}>
-                      {t.codigo}{t.horario ? ` (${t.horario})` : ''}
+                    <div key={i} className="flex items-center gap-1 py-0.5">
+                      <span className="text-[10px] font-bold" style={{ color: colors.parent1 }}>
+                        {t.codigo}{t.horario ? ` (${t.horario})` : ''}
+                      </span>
+                      <Papelera onClick={() => borrarDelDia(fechaKey, 'turno', t.idx, t.codigo)} />
                     </div>
                   ))}
                 </div>
@@ -3171,7 +3219,7 @@ const CoParentingApp = () => {
                 <div className="mb-1">
                   <div className="text-[9px] font-bold text-gray-500">Actividades</div>
                   {listaActividades.map((a, i) => (
-                    <div key={i} className="flex items-center gap-1">
+                    <div key={i} className="flex items-center gap-1 py-0.5">
                       <span className="text-[10px] font-bold rounded px-1"
                         style={{ color: a.color, backgroundColor: a.fondo || 'transparent' }}>
                         {a.textoVisible}
@@ -3179,6 +3227,8 @@ const CoParentingApp = () => {
                       {(a.entrada || a.salida) && (
                         <span className="text-[9px] text-gray-500">{a.entrada || '?'} - {a.salida || '?'}</span>
                       )}
+                      <Papelera onClick={() => borrarDelDia(fechaKey, 'actividad', a.idx,
+                        `${a.textoVisible}${(a.entrada || a.salida) ? ` ${a.entrada || '?'}-${a.salida || '?'}` : ''}`)} />
                     </div>
                   ))}
                 </div>
