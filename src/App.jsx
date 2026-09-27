@@ -30,6 +30,11 @@ const CoParentingApp = () => {
   const [bloqueActivoDia, setBloqueActivoDia] = useState(0); // Bloque de turno/actividad que se ve en la vista Día
   const [bloquesExtraDia, setBloquesExtraDia] = useState({}); // Bloques añadidos con el botón "+" en la vista Día
   const [diaDetalle, setDiaDetalle] = useState(null); // Día cuya información ampliada se está mostrando
+  const [turnosPendientes, setTurnosPendientes] = useState({}); // Días con turnos/actividades cambiados y aún SIN guardar
+  const [asignacionesPendientes, setAsignacionesPendientes] = useState({}); // Franjas de custodia cambiadas y aún SIN guardar
+  const [irAHoy, setIrAHoy] = useState(0); // Cada vez que se pulsa Mes o Año se vuelve a saltar a hoy
+  const mesSemanaHoyRef = useRef(null); // Semana de hoy en la vista Mes (para el salto automático)
+  const anoMesActualRef = useRef(null); // Mes actual en la vista Año (para el salto automático)
   const periods = ['Mañana', 'Tarde', 'Noche'];
   const daysOfWeek = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const monthsShort = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
@@ -322,17 +327,17 @@ const CoParentingApp = () => {
   
   const handleScheduleChange = useCallback((key, value) => { 
     setSchedule(prev => ({ ...prev, [key]: value }));
-    // Guardar automáticamente en Supabase
+    // No se guarda al momento: queda pendiente hasta pulsar "Guardar y recargar"
     if (currentUser === 'parent1') {
-      saveOneAsignacion(key, value);
+      setAsignacionesPendientes(prev => ({ ...prev, [key]: true }));
     }
   }, [currentUser, parents, children]);
   
   const handleTurnoChange = useCallback((fecha, quien, value) => { 
     setTurnos(prev => ({ ...prev, [`${fecha}_${quien}`]: value }));
-    // Guardar automáticamente en Supabase
+    // No se guarda al momento: queda pendiente hasta pulsar "Guardar y recargar"
     if (currentUser === 'parent1') {
-      saveOneTurno(fecha, quien, value);
+      setTurnosPendientes(prev => ({ ...prev, [fecha]: true }));
     }
   }, [currentUser]);
 
@@ -632,11 +637,69 @@ const CoParentingApp = () => {
     if (step === 'main' && parents.parent1 && children.child1) loadScheduleFromSupabase();
   }, [step, parents.parent1, children.child1, loadScheduleFromSupabase]);
 
+  // Guardar en Supabase TODO lo de un día (turno, actividad y turno madre) de una sola vez,
+  // tomando los valores que hay ahora mismo en pantalla
+  const saveTurnoDia = async (fecha) => {
+    try {
+      const padre = turnos[`${fecha}_padre`] || '';
+      const actividad = turnos[`${fecha}_padre_actividad`] || '';
+      const madre = turnos[`${fecha}_madre`] || '';
+      const turnoPadreCompleto = actividad ? `${padre}||${actividad}` : padre;
+
+      const { error: deleteError } = await supabase.from('turnos').delete().eq('fecha', fecha);
+      if (deleteError) {
+        console.error('Error borrando turnos antiguos:', deleteError);
+        return false;
+      }
+      if (turnoPadreCompleto || madre) {
+        const { error: insertError } = await supabase.from('turnos').insert({
+          fecha,
+          turno_padre: turnoPadreCompleto || null,
+          turno_madre: madre || null
+        });
+        if (insertError) {
+          console.error('Error guardando turno:', insertError);
+          return false;
+        }
+      }
+      return true;
+    } catch (err) {
+      console.error('Error en saveTurnoDia:', err);
+      return false;
+    }
+  };
+
+  // Guardar todos los cambios pendientes (turnos, actividades y custodia)
+  const guardarPendientes = async () => {
+    const fechas = Object.keys(turnosPendientes);
+    const claves = Object.keys(asignacionesPendientes);
+    if (fechas.length === 0 && claves.length === 0) return true;
+    let todoBien = true;
+    for (const fecha of fechas) {
+      const ok = await saveTurnoDia(fecha);
+      if (!ok) todoBien = false;
+    }
+    for (const clave of claves) {
+      await saveOneAsignacion(clave, schedule[clave] || '');
+    }
+    if (todoBien) {
+      setTurnosPendientes({});
+      setAsignacionesPendientes({});
+    }
+    return todoBien;
+  };
+
   const saveScheduleInSupabase = async () => {
-    // Ahora solo recarga los datos desde Supabase para verificar sincronización
-    // (Las asignaciones ya se guardan automáticamente con saveOneAsignacion)
+    // Primero guarda los cambios pendientes y después recarga los datos desde Supabase
     setIsSaving(true);
     try {
+      const guardadoOk = await guardarPendientes();
+      if (!guardadoOk) {
+        // Si algo falla NO se recarga, para no perder lo que hay en pantalla
+        setIsSaving(false);
+        setLastSaveStatus('error');
+        return;
+      }
       await loadScheduleFromSupabase();
       setIsSaving(false);
       setLastSaveStatus('success');
@@ -647,6 +710,24 @@ const CoParentingApp = () => {
       setLastSaveStatus('error');
     }
   };
+
+  // Si se sale de la vista Día con cambios sin guardar, se guardan para no perderlos
+  useEffect(() => {
+    if (currentView !== 'daily' && (Object.keys(turnosPendientes).length > 0 || Object.keys(asignacionesPendientes).length > 0)) {
+      guardarPendientes();
+    }
+  }, [currentView]);
+
+  // Al abrir Mes o Año (o al volver a pulsar su botón), saltar a hoy.
+  // Solo ocurre en esos momentos: al tocar un día ya NO se mueve la pantalla.
+  useEffect(() => {
+    if (currentView === 'month' && mesSemanaHoyRef.current) {
+      mesSemanaHoyRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+    if (currentView === 'year' && anoMesActualRef.current) {
+      anoMesActualRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
+    }
+  }, [currentView, irAHoy]);
 
   // Componente selector de actividad extra del padre (3 desplegables en 1 fila + campo de texto libre)
   const ActividadPadreSelector = ({ fecha, bloqueIdx = 0 }) => {
@@ -664,8 +745,9 @@ const CoParentingApp = () => {
     const guardarBloque = (nuevoBloque) => {
       const nuevaCadena = setBloqueEnCadena(turnos[`${fecha}_padre_actividad`] || '', bloqueIdx, nuevoBloque);
       setTurnos(prev => ({ ...prev, [`${fecha}_padre_actividad`]: nuevaCadena }));
+      // No se guarda al momento: queda pendiente hasta pulsar "Guardar y recargar"
       if (currentUser === 'parent1') {
-        saveOneTurno(fecha, 'padre_actividad', nuevaCadena);
+        setTurnosPendientes(prev => ({ ...prev, [fecha]: true }));
       }
     };
     
@@ -734,9 +816,9 @@ const CoParentingApp = () => {
       const newT2 = turnoNum === 2 ? { ...t2, [field]: value } : { ...t2 };
       const newTurno = buildTurnoMadre(newT1.tipo, newT1.entrada, newT1.salida, newT2.tipo, newT2.entrada, newT2.salida);
       setTurnos(prev => ({ ...prev, [`${fecha}_madre`]: newTurno }));
-      // GUARDAR EN SUPABASE
+      // No se guarda al momento: queda pendiente hasta pulsar "Guardar y recargar"
       if (currentUser === 'parent1') {
-        saveOneTurno(fecha, 'madre', newTurno);
+        setTurnosPendientes(prev => ({ ...prev, [fecha]: true }));
       }
     };
 
@@ -782,6 +864,7 @@ const CoParentingApp = () => {
     const turnoKey = getTurnoKey(currentDate);
     const todayStyle = isToday(currentDate);
     const redDay = isRedDay(currentDate);
+    const hayPendientes = Object.keys(turnosPendientes).length > 0 || Object.keys(asignacionesPendientes).length > 0;
 
     // Bloques de turno/actividad de este día y cuál se está viendo
     const numBloques = getNumBloquesDia(turnoKey);
@@ -810,8 +893,8 @@ const CoParentingApp = () => {
               <div className="flex items-center gap-1 mb-1">
                 <button onClick={saveScheduleInSupabase} 
                   disabled={isSaving}
-                  className={`px-3 py-1 text-xs rounded font-bold ${isSaving ? 'bg-gray-400' : 'bg-green-600'} text-white`}>
-                  {isSaving ? 'Cargando...' : '↻ Recargar'}
+                  className={`px-3 py-1 text-xs rounded font-bold ${isSaving ? 'bg-gray-400' : (hayPendientes ? 'bg-orange-500' : 'bg-green-600')} text-white`}>
+                  {isSaving ? 'Guardando...' : (hayPendientes ? '💾 Guardar y recargar' : '↻ Recargar')}
                 </button>
                 {lastSaveStatus === 'success' && (
                   <span className="text-green-600 text-xs">✓</span>
@@ -825,6 +908,9 @@ const CoParentingApp = () => {
               style={{ color: todayStyle ? 'white' : (redDay ? '#dc2626' : 'inherit') }}>
               {dayName} {dayNum} {monthName}
             </div>
+            {isParent1User && hayPendientes && !isSaving && (
+              <div className="text-[9px] font-bold text-orange-600 mt-0.5">Cambios sin guardar</div>
+            )}
           </div>
           <button onClick={() => { setBloqueActivoDia(0); setCurrentDate(d => addDays(d, 1)); }} className="px-2 py-1 border rounded text-sm font-bold">▶</button>
         </div>
@@ -1385,16 +1471,8 @@ const CoParentingApp = () => {
 
     const weeks = generateYearWeeks();
 
-    // Índice de la semana que contiene el día de hoy, y referencia para poder hacer scroll hasta ella
+    // Índice de la semana que contiene el día de hoy (el salto automático hasta ella se hace al abrir la vista)
     const todayWeekIndex = weeks.findIndex(week => week.some(date => isToday(date)));
-    const todayWeekRef = useRef(null);
-
-    // Al abrir la vista, saltar automáticamente a la semana actual (en vez de abrir siempre en enero)
-    useEffect(() => {
-      if (todayWeekRef.current) {
-        todayWeekRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
-      }
-    }, []);
 
     // Obtener etiqueta del mes
     const getMonthLabel = (date) => {
@@ -1559,14 +1637,15 @@ const CoParentingApp = () => {
         </div>
         
         {/* Calendario scrollable continuo - todo el año */}
-        <div className="flex-1 overflow-y-auto p-1">
+        {/* Con el recuadro de abajo abierto se deja espacio extra para poder tocar también los últimos días */}
+        <div className="flex-1 overflow-y-auto p-1" style={{ paddingBottom: diaDetalle ? 160 : undefined }}>
           {weeks.map((week, weekIdx) => {
             const firstDayOfWeek = week[0];
             const showMonthHeader = firstDayOfWeek.getDate() <= 7;
             const monthLabel = showMonthHeader ? getMonthLabel(firstDayOfWeek) : null;
             
             return (
-              <div key={weekIdx} ref={weekIdx === todayWeekIndex ? todayWeekRef : null}>
+              <div key={weekIdx} ref={weekIdx === todayWeekIndex ? mesSemanaHoyRef : null}>
                 {monthLabel && (
                   <div className="text-center text-xs font-bold text-gray-600 py-1 bg-gray-100 rounded my-1">
                     {capitalize(monthLabel)}
@@ -2720,14 +2799,6 @@ const CoParentingApp = () => {
     // Mes de hoy, y referencia para poder hacer scroll hasta su bloque en la rejilla
     const today = new Date();
     const todayMonthIndex = currentYear === today.getFullYear() ? today.getMonth() : -1;
-    const currentMonthRef = useRef(null);
-
-    // Al abrir la vista, saltar automáticamente al mes actual (en vez de abrir siempre en enero)
-    useEffect(() => {
-      if (currentMonthRef.current) {
-        currentMonthRef.current.scrollIntoView({ behavior: 'auto', block: 'start' });
-      }
-    }, []);
     
     // Colores para el calendario anual: Azul padre (más transparente), Amarillo madre, Rosa otro
     const getColorForAssigned = (assigned) => {
@@ -2800,13 +2871,13 @@ const CoParentingApp = () => {
         </div>
         
         {/* Grid de 12 meses (4 filas x 3 columnas) */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" style={{ paddingBottom: diaDetalle ? 160 : undefined }}>
           <div className="grid grid-cols-3 gap-2">
             {monthNames.map((monthName, monthIdx) => {
               const monthDates = getMonthDatesForYear(monthIdx);
               
               return (
-                <div key={monthIdx} ref={monthIdx === todayMonthIndex ? currentMonthRef : null} className="border rounded p-1">
+                <div key={monthIdx} ref={monthIdx === todayMonthIndex ? anoMesActualRef : null} className="border rounded p-1">
                   {/* Nombre del mes */}
                   <div className="text-[9px] font-bold text-center mb-1 text-gray-700">{monthName}</div>
                   
@@ -3023,10 +3094,10 @@ const CoParentingApp = () => {
           </div>
           {/* Columna derecha: botones Mes y Año grandes */}
           <div className="flex gap-1 p-1">
-            <button onClick={() => { setCurrentDate(new Date()); setCurrentView('month'); }} className={`px-4 text-sm font-bold rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            <button onClick={() => { setCurrentDate(new Date()); setCurrentView('month'); setIrAHoy(n => n + 1); }} className={`px-4 text-sm font-bold rounded ${currentView === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
               Mes
             </button>
-            <button onClick={() => { setCurrentDate(new Date()); setCurrentView('year'); }} className={`px-4 text-sm font-bold rounded ${currentView === 'year' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+            <button onClick={() => { setCurrentDate(new Date()); setCurrentView('year'); setIrAHoy(n => n + 1); }} className={`px-4 text-sm font-bold rounded ${currentView === 'year' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
               Año
             </button>
           </div>
@@ -3052,11 +3123,11 @@ const CoParentingApp = () => {
       )}
       
       <div className="flex-1 overflow-y-auto">
-        {currentView === 'daily' && <DailyView />}
+        {currentView === 'daily' && DailyView()}
         {currentView === 'weekAssign' && <WeekAssignView />}
         {currentView === 'week' && <WeekView />}
-        {currentView === 'month' && (currentUser === 'child1' ? <ChildMonthView childKey="child1" /> : currentUser === 'child2' ? <ChildMonthView childKey="child2" /> : <MonthView />)}
-        {currentView === 'year' && <YearCalendar />}
+        {currentView === 'month' && (currentUser === 'child1' ? <ChildMonthView childKey="child1" /> : currentUser === 'child2' ? <ChildMonthView childKey="child2" /> : MonthView())}
+        {currentView === 'year' && YearCalendar()}
         {currentView === 'globalMonth' && <GlobalMonthCalendar />}
         {currentView === 'child1month' && <ChildMonthView childKey="child1" />}
         {currentView === 'child2month' && <ChildMonthView childKey="child2" />}
@@ -3137,6 +3208,5 @@ const CoParentingApp = () => {
 };
 
 export default CoParentingApp;
-
 
 
