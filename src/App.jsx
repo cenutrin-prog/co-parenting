@@ -570,6 +570,81 @@ const CoParentingApp = () => {
     else setDiaDetalle(date);
   };
 
+  // ---- Recuadros de los eventos de VARIOS días (vistas Mes y Año) ----
+  // Eventos de varios días que tocan una semana (fila de 7 días; en Año puede haber huecos vacíos)
+  const getEventosVariosDiasSemana = (week) => {
+    const eventos = {};
+    week.forEach((date, col) => {
+      if (!date) return;
+      getActividadesParaCalendario(getTurnoKey(date))
+        .filter(a => a.infoRango)
+        .forEach(a => {
+          if (!eventos[a.rango]) eventos[a.rango] = { ...a, columnas: [] };
+          eventos[a.rango].columnas.push(col);
+        });
+    });
+    return Object.values(eventos).sort((x, y) => x.infoRango.inicio.localeCompare(y.infoRango.inicio));
+  };
+
+  // Medidas de los recuadros según la vista (en Año los días son mucho más pequeños)
+  const medidasBarras = {
+    mes: { arriba: 15, alto: 11, hueco: 1, letra: 7, separacion: 2 },
+    ano: { arriba: 6, alto: 6, hueco: 1, letra: 4, separacion: 2 }
+  };
+
+  // Pinta los recuadros en la parte de ARRIBA de los días (debajo del número), por encima de los turnos
+  const renderBarrasVariosDias = (week, vista) => {
+    const lista = getEventosVariosDiasSemana(week);
+    if (lista.length === 0) return null;
+    const m = medidasBarras[vista];
+    return (
+      <div className="absolute left-0 right-0 grid grid-cols-7 pointer-events-none"
+        style={{
+          top: m.arriba,
+          columnGap: m.separacion,
+          rowGap: m.hueco,
+          gridAutoRows: m.alto,
+          filter: copiaEvento ? 'grayscale(1)' : undefined,
+          opacity: copiaEvento ? 0.45 : undefined
+        }}>
+        {lista.map((ev, fila) => {
+          const desde = Math.min(...ev.columnas);
+          const hasta = Math.max(...ev.columnas);
+          const empiezaAqui = formatDate(week[desde]) === ev.infoRango.inicio;
+          const terminaAqui = formatDate(week[hasta]) === ev.infoRango.fin;
+          const radio = vista === 'mes' ? 4 : 2;
+          return (
+            <div key={ev.rango}
+              className="flex items-center gap-[1px] font-bold overflow-hidden whitespace-nowrap"
+              style={{
+                gridColumn: `${desde + 1} / ${hasta + 2}`,
+                gridRow: fila + 1,
+                fontSize: m.letra,
+                lineHeight: 1,
+                paddingLeft: vista === 'mes' ? 3 : 1,
+                paddingRight: vista === 'mes' ? 3 : 1,
+                color: ev.color,
+                backgroundColor: ev.fondo || 'rgba(255,255,255,0.92)',
+                border: `1px solid ${ev.fondo || ev.color}`,
+                borderTopLeftRadius: empiezaAqui ? radio : 0,
+                borderBottomLeftRadius: empiezaAqui ? radio : 0,
+                borderTopRightRadius: terminaAqui ? radio : 0,
+                borderBottomRightRadius: terminaAqui ? radio : 0,
+                borderLeftWidth: empiezaAqui ? 1 : 0,
+                borderRightWidth: terminaAqui ? 1 : 0
+              }}>
+              {vista === 'mes' && !empiezaAqui && <span>◀</span>}
+              {vista === 'mes' && empiezaAqui && ev.entrada && <span className="font-normal">{ev.entrada}</span>}
+              <span className="truncate flex-1">{ev.textoVisible}</span>
+              {vista === 'mes' && terminaAqui && ev.salida && <span className="font-normal">{ev.salida}</span>}
+              {vista === 'mes' && !terminaAqui && <span>▶</span>}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   // Parsear turno de la madre (formato: "Mañana|09:00|15:00;Tarde|17:00|21:00")
   const parseTurnoMadre = (turno) => {
     if (!turno) return [];
@@ -1821,7 +1896,7 @@ const CoParentingApp = () => {
     };
 
     // Renderizar un día para padres
-    const renderDayParent = (date) => {
+    const renderDayParent = (date, filasBarras = 0) => {
       const today = isToday(date);
       const redDay = isRedDay(date);
       const dateKey = formatDate(date);
@@ -1853,7 +1928,7 @@ const CoParentingApp = () => {
           onClick={() => handleClickDia(date)}
           style={{
             border: marcadoCopia ? '3px solid #2563eb' : (today ? '2px solid black' : '1px solid #e5e7eb'),
-            minHeight: 55,
+            minHeight: 55 + filasBarras * 12,
             filter: copiaEvento && !marcadoCopia ? 'grayscale(1)' : undefined,
             opacity: copiaEvento && !marcadoCopia ? 0.45 : undefined
           }}>
@@ -1882,7 +1957,8 @@ const CoParentingApp = () => {
             </div>
             {/* Turnos (arriba del todo) y debajo las actividades, una por línea */}
             {(turnosDia.length > 0 || actividadesDia.length > 0) && (
-              <div className="absolute inset-0 flex flex-col items-center justify-start gap-[1px] px-[1px] pointer-events-none">
+              <div className="absolute inset-0 flex flex-col items-center justify-start gap-[1px] px-[1px] pointer-events-none"
+                style={{ paddingTop: filasBarras ? filasBarras * 12 + 1 : undefined }}>
                 {turnosDia.map((t, i) => (
                   <span key={`t${i}`} className={`text-[8px] font-bold px-1 rounded leading-tight ${t.esExtra ? 'bg-red-600 text-white' : 'bg-white text-black'}`}>{t.codigo}</span>
                 ))}
@@ -1895,55 +1971,6 @@ const CoParentingApp = () => {
               </div>
             )}
           </div>
-        </div>
-      );
-    };
-
-    // Recuadros de los eventos de VARIOS días de una semana (un único recuadro que ocupa todos sus días)
-    const renderEventosVariosDias = (week) => {
-      const eventos = {};
-      week.forEach((date, col) => {
-        getActividadesParaCalendario(getTurnoKey(date))
-          .filter(a => a.infoRango)
-          .forEach(a => {
-            if (!eventos[a.rango]) eventos[a.rango] = { ...a, columnas: [] };
-            eventos[a.rango].columnas.push(col);
-          });
-      });
-      const lista = Object.values(eventos).sort((x, y) => x.infoRango.inicio.localeCompare(y.infoRango.inicio));
-      if (lista.length === 0) return null;
-      return (
-        <div className="absolute left-0 right-0 bottom-[2px] grid grid-cols-7 gap-x-0.5 gap-y-[1px] pointer-events-none"
-          style={{ filter: copiaEvento ? 'grayscale(1)' : undefined, opacity: copiaEvento ? 0.45 : undefined }}>
-          {lista.map((ev, fila) => {
-            const desde = Math.min(...ev.columnas);
-            const hasta = Math.max(...ev.columnas);
-            const empiezaAqui = formatDate(week[desde]) === ev.infoRango.inicio;
-            const terminaAqui = formatDate(week[hasta]) === ev.infoRango.fin;
-            return (
-              <div key={ev.rango}
-                className="flex items-center gap-0.5 text-[7px] font-bold leading-tight px-[3px] overflow-hidden whitespace-nowrap"
-                style={{
-                  gridColumn: `${desde + 1} / ${hasta + 2}`,
-                  gridRow: fila + 1,
-                  color: ev.color,
-                  backgroundColor: ev.fondo || 'rgba(255,255,255,0.92)',
-                  border: `1px solid ${ev.fondo || ev.color}`,
-                  borderTopLeftRadius: empiezaAqui ? 4 : 0,
-                  borderBottomLeftRadius: empiezaAqui ? 4 : 0,
-                  borderTopRightRadius: terminaAqui ? 4 : 0,
-                  borderBottomRightRadius: terminaAqui ? 4 : 0,
-                  borderLeftWidth: empiezaAqui ? 1 : 0,
-                  borderRightWidth: terminaAqui ? 1 : 0
-                }}>
-                {!empiezaAqui && <span>◀</span>}
-                {empiezaAqui && ev.entrada && <span className="font-normal">{ev.entrada}</span>}
-                <span className="truncate flex-1">{ev.textoVisible}</span>
-                {terminaAqui && ev.salida && <span className="font-normal">{ev.salida}</span>}
-                {!terminaAqui && <span>▶</span>}
-              </div>
-            );
-          })}
         </div>
       );
     };
@@ -2017,9 +2044,9 @@ const CoParentingApp = () => {
                 )}
                 <div className="relative mb-0.5">
                   <div className="grid grid-cols-7 gap-0.5">
-                    {week.map(date => renderDayParent(date))}
+                    {(() => { const filas = getEventosVariosDiasSemana(week).length; return week.map(date => renderDayParent(date, filas)); })()}
                   </div>
-                  {renderEventosVariosDias(week)}
+                  {renderBarrasVariosDias(week, 'mes')}
                 </div>
               </div>
             );
@@ -3257,9 +3284,19 @@ const CoParentingApp = () => {
                   </div>
                   
                   {/* Días del mes */}
+                  {/* Se pinta por semanas, para que los eventos de varios días se vean como un único recuadro */}
+                  <div className="flex flex-col gap-0.5">
+                  {Array.from({ length: Math.ceil(monthDates.length / 7) }, (_, w) => {
+                    const semana = monthDates.slice(w * 7, w * 7 + 7);
+                    while (semana.length < 7) semana.push(null);
+                    const filasBarras = getEventosVariosDiasSemana(semana).length;
+                    const altoDia = 32 + filasBarras * 7;
+                    return (
+                  <div key={`sem-${monthIdx}-${w}`} className="relative">
                   <div className="grid grid-cols-7 gap-0.5">
-                    {monthDates.map((date, idx) => {
-                      if (!date) return <div key={`empty-${monthIdx}-${idx}`} style={{ height: 32 }} />;
+                    {semana.map((date, i) => {
+                      const idx = w * 7 + i;
+                      if (!date) return <div key={`empty-${monthIdx}-${idx}`} style={{ height: altoDia }} />;
                       
                       // Obtener asignaciones para las 6 combinaciones (Denia y Elsa x Mañana, Tarde, Noche)
                       // child1 = Denia (izquierda), child2 = Elsa (derecha)
@@ -3280,7 +3317,8 @@ const CoParentingApp = () => {
                       // Obtener turnos de trabajo y actividades (puede haber varios)
                       const turnoKey = getTurnoKey(date);
                       const turnosDia = getTurnosParaCalendario(turnoKey);
-                      const actividadesDia = getActividadesParaCalendario(turnoKey);
+                      // Los eventos de varios días no van dentro del día: se pintan como un recuadro que ocupa todos sus días
+                      const actividadesDia = getActividadesParaCalendario(turnoKey).filter(a => !a.infoRango);
                       
                       const today = isToday(date);
                       const redDay = isRedDay(date);
@@ -3295,7 +3333,7 @@ const CoParentingApp = () => {
                           className="rounded-sm flex flex-col overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400"
                           onClick={() => handleClickDia(date)}
                           style={{
-                            height: 32,
+                            height: altoDia,
                             border: marcadoCopia ? '2px solid #2563eb' : (today ? '2px solid black' : '1px solid #e5e7eb'),
                             filter: copiaEvento && !marcadoCopia ? 'grayscale(1)' : undefined,
                             opacity: copiaEvento && !marcadoCopia ? 0.45 : undefined
@@ -3326,7 +3364,7 @@ const CoParentingApp = () => {
                             </div>
                             {/* Turnos (arriba del todo) y debajo las actividades, una por línea */}
                             {hayTurno && (
-                              <div className="absolute inset-0 flex flex-col items-center justify-start px-[1px] pointer-events-none" style={{ lineHeight: 1 }}>
+                              <div className="absolute inset-0 flex flex-col items-center justify-start px-[1px] pointer-events-none" style={{ lineHeight: 1, paddingTop: filasBarras ? filasBarras * 7 : undefined }}>
                                 {/* Turnos de trabajo - con recuadro */}
                                 {turnosDia.map((t, i) => (
                                   <span key={`t${i}`} className={`text-[4px] font-bold px-0.5 rounded ${t.esExtra ? 'bg-red-600 text-white' : 'bg-white/80 text-black'}`}>{t.codigo}</span>
@@ -3344,6 +3382,11 @@ const CoParentingApp = () => {
                         </div>
                       );
                     })}
+                  </div>
+                  {renderBarrasVariosDias(semana, 'ano')}
+                  </div>
+                    );
+                  })}
                   </div>
                 </div>
               );
@@ -3626,4 +3669,5 @@ const CoParentingApp = () => {
 };
 
 export default CoParentingApp;
+
 
