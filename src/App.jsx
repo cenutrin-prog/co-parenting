@@ -33,6 +33,8 @@ const CoParentingApp = () => {
   const [turnosPendientes, setTurnosPendientes] = useState({}); // Días con turnos/actividades cambiados y aún SIN guardar
   const [asignacionesPendientes, setAsignacionesPendientes] = useState({}); // Franjas de custodia cambiadas y aún SIN guardar
   const [irAHoy, setIrAHoy] = useState(0); // Cada vez que se pulsa Mes o Año se vuelve a saltar a hoy
+  const [copiaEvento, setCopiaEvento] = useState(null); // Turno o actividad que se está copiando a otros días (modo copiar de Mes/Año)
+  const [diasCopia, setDiasCopia] = useState({}); // Días marcados en el calendario para copiar el evento
   const mesSemanaHoyRef = useRef(null); // Semana de hoy en la vista Mes (para el salto automático)
   const anoMesActualRef = useRef(null); // Mes actual en la vista Año (para el salto automático)
   const periods = ['Mañana', 'Tarde', 'Noche'];
@@ -352,17 +354,104 @@ const CoParentingApp = () => {
 
   // Parsear actividad extra del padre (formato: "CURSO|09:00|15:00|texto")
   const parseActividadPadre = (actividad) => {
-    if (!actividad) return { tipo: '', entrada: '', salida: '', textoOtro: '' };
-    const [tipo, entrada, salida, textoOtro] = actividad.split('|');
+    if (!actividad) return { tipo: '', entrada: '', salida: '', textoOtro: '', rango: '' };
+    const [tipo, entrada, salida, textoOtro, rango] = actividad.split('|');
     // "CLASE MÁSTER" era el nombre antiguo; los datos ya guardados se leen como "MÁSTER"
     const tipoNormalizado = tipo === 'CLASE MÁSTER' ? 'MÁSTER' : (tipo || '');
-    return { tipo: tipoNormalizado, entrada: entrada || '', salida: salida || '', textoOtro: textoOtro || '' };
+    return { tipo: tipoNormalizado, entrada: entrada || '', salida: salida || '', textoOtro: textoOtro || '', rango: rango || '' };
   };
 
   // Construir string de actividad padre
-  const buildActividadPadre = (tipo, entrada, salida, textoOtro = '') => {
+  // (el 5º campo "rango" solo existe en los eventos de VARIOS días)
+  const buildActividadPadre = (tipo, entrada, salida, textoOtro = '', rango = '') => {
     if (!tipo && !entrada && !salida && !textoOtro) return '';
-    return `${tipo || ''}|${entrada || ''}|${salida || ''}|${textoOtro || ''}`;
+    return `${tipo || ''}|${entrada || ''}|${salida || ''}|${textoOtro || ''}` + (rango ? `|${rango}` : '');
+  };
+
+  // ---- Eventos de VARIOS días (p. ej. viajes) ----
+  // El evento se copia en cada uno de sus días con la marca "inicio~fin~id",
+  // que es lo que permite reconocerlo y pintarlo como un único recuadro en la vista Mes
+  const parseRango = (rango) => {
+    if (!rango) return null;
+    const [inicio, fin, id] = rango.split('~');
+    if (!inicio || !fin) return null;
+    return { inicio, fin, id: id || '' };
+  };
+
+  // Convertir "AAAA-MM-DD" en fecha (a mediodía, para evitar líos con el cambio de hora)
+  const fechaDeTexto = (texto) => {
+    const [y, m, d] = texto.split('-').map(Number);
+    return new Date(y, m - 1, d, 12);
+  };
+
+  // Lista de días (en texto "AAAA-MM-DD") entre dos fechas, ambas incluidas
+  const fechasEntre = (inicio, fin) => {
+    const lista = [];
+    let d = fechaDeTexto(inicio);
+    const ultimo = fechaDeTexto(fin);
+    while (d <= ultimo && lista.length < 400) { lista.push(formatDate(d)); d = addDays(d, 1); }
+    return lista;
+  };
+
+  // Fecha corta para mostrar (p. ej. "10 oct")
+  const fechaCorta = (texto) => {
+    const d = fechaDeTexto(texto);
+    return `${d.getDate()} ${monthsShort[d.getMonth()]}`;
+  };
+
+  // Calcula cómo quedan los días afectados al crear, cambiar o borrar un evento de varios días.
+  // - fechaActual / bloqueIdx: el día y el bloque desde el que se está editando
+  // - rangoViejo: la marca que tenía el evento antes del cambio ('' si era de un solo día)
+  // - nuevoBloque: el evento ya montado ('' para borrarlo de todos sus días)
+  // Devuelve los nuevos valores de cada día y la lista de días tocados
+  const calcularCambiosMultidia = (fechaActual, bloqueIdx, rangoViejo, nuevoBloque, quitarHuecoActual = false) => {
+    const infoVieja = parseRango(rangoViejo);
+    const infoNueva = parseRango(parseActividadPadre(nuevoBloque).rango);
+    const diasNuevos = nuevoBloque ? (infoNueva ? fechasEntre(infoNueva.inicio, infoNueva.fin) : [fechaActual]) : [];
+    const diasViejos = infoVieja ? fechasEntre(infoVieja.inicio, infoVieja.fin) : [];
+    const todos = [...new Set([fechaActual, ...diasViejos, ...diasNuevos])];
+    const valores = {};
+    todos.forEach(f => {
+      const listaT = splitBloques(turnos[`${f}_padre`] || '');
+      const listaA = splitBloques(turnos[`${f}_padre_actividad`] || '');
+      const minimo = f === fechaActual ? bloqueIdx + 1 : 0;
+      const largo = Math.max(listaT.length, listaA.length, minimo);
+      while (listaT.length < largo) listaT.push('');
+      while (listaA.length < largo) listaA.push('');
+      // Buscar dónde está el evento en este día
+      let idx = -1;
+      if (f === fechaActual) idx = bloqueIdx;
+      else if (rangoViejo) idx = listaA.findIndex(a => a && parseActividadPadre(a).rango === rangoViejo);
+      if (diasNuevos.includes(f)) {
+        // El evento tiene que estar en este día
+        if (idx === -1) idx = listaA.findIndex(a => !a);
+        if (idx === -1) { listaT.push(''); listaA.push(''); idx = listaA.length - 1; }
+        listaA[idx] = nuevoBloque;
+      } else if (idx !== -1) {
+        // El evento ya no está en este día: se quita
+        listaA[idx] = '';
+        if (!listaT[idx] && (f !== fechaActual || quitarHuecoActual)) { listaT.splice(idx, 1); listaA.splice(idx, 1); }
+      }
+      const limpiar = (lista) => {
+        while (lista.length > 0 && !(lista[lista.length - 1] || '').split('|').some(c => c)) lista.pop();
+        return lista.some(b => (b || '').split('|').some(c => c)) ? lista.join(SEP_BLOQUES) : '';
+      };
+      valores[f] = { padre: limpiar(listaT), actividad: limpiar(listaA) };
+    });
+    return { valores, dias: todos };
+  };
+
+  // Aplicar en pantalla los cambios de un evento de varios días (quedan pendientes de guardar, como todo en la vista Día)
+  const aplicarEventoMultidia = (fechaActual, bloqueIdx, rangoViejo, nuevoBloque) => {
+    const { valores, dias } = calcularCambiosMultidia(fechaActual, bloqueIdx, rangoViejo, nuevoBloque);
+    setTurnos(prev => {
+      const n = { ...prev };
+      dias.forEach(f => { n[`${f}_padre`] = valores[f].padre; n[`${f}_padre_actividad`] = valores[f].actividad; });
+      return n;
+    });
+    if (currentUser === 'parent1') {
+      setTurnosPendientes(prev => { const n = { ...prev }; dias.forEach(f => { n[f] = true; }); return n; });
+    }
   };
 
   // ---- Soporte para VARIOS bloques (turno + actividad) en un mismo día ----
@@ -444,7 +533,10 @@ const CoParentingApp = () => {
           color: estilo.color,
           fondo: estilo.fondo,
           entrada: a.entrada || '',
-          salida: a.salida || ''
+          salida: a.salida || '',
+          rango: a.rango || '',
+          infoRango: parseRango(a.rango),
+          cadena: getActividadesPadreDia(fecha)[a.idx] || ''
         };
       });
 
@@ -465,6 +557,12 @@ const CoParentingApp = () => {
   };
 
   const handleClickDia = (date) => {
+    // En modo copiar, cada clic marca o desmarca el día
+    if (copiaEvento) {
+      const f = formatDate(date);
+      setDiasCopia(prev => { const n = { ...prev }; if (n[f]) delete n[f]; else n[f] = true; return n; });
+      return;
+    }
     // El recuadro ampliado solo tiene información para el padre;
     // el resto de usuarios van directamente al día
     if (currentUser !== 'parent1') { abrirDiaParaEditar(date); return; }
@@ -673,6 +771,36 @@ const CoParentingApp = () => {
   // Borrar UN turno o UNA actividad de un día (papelera del recuadro de detalle).
   // Se guarda al momento, porque en Mes y Año no hay botón de guardar.
   const borrarDelDia = async (fecha, que, idx, descripcion) => {
+    // Si es un evento de VARIOS días, se borra de todos sus días
+    const actividadCadena = que === 'actividad' ? (splitBloques(turnos[`${fecha}_padre_actividad`] || '')[idx] || '') : '';
+    const rangoEvento = parseActividadPadre(actividadCadena).rango;
+    const infoEvento = parseRango(rangoEvento);
+    if (infoEvento) {
+      if (!window.confirm(`"${descripcion}" dura varios días (${fechaCorta(infoEvento.inicio)} - ${fechaCorta(infoEvento.fin)}).\n¿Borrarlo de TODOS esos días?`)) return;
+      const { valores, dias } = calcularCambiosMultidia(fecha, idx, rangoEvento, '', true);
+      setTurnos(prev => {
+        const n = { ...prev };
+        dias.forEach(f => { n[`${f}_padre`] = valores[f].padre; n[`${f}_padre_actividad`] = valores[f].actividad; });
+        return n;
+      });
+      setBloqueActivoDia(0);
+      if (currentUser === 'parent1') {
+        let todoOk = true;
+        for (const f of dias) {
+          const ok = await saveTurnoDia(f, valores[f]);
+          if (!ok) todoOk = false;
+        }
+        if (todoOk) {
+          setTurnosPendientes(prev => { const n = { ...prev }; dias.forEach(f => delete n[f]); return n; });
+          setLastSaveStatus('success');
+          setTimeout(() => setLastSaveStatus(null), 2000);
+        } else {
+          setLastSaveStatus('error');
+          alert('No se ha podido borrar en todos los días. Pulsa Recargar e inténtalo de nuevo.');
+        }
+      }
+      return;
+    }
     if (!window.confirm(`¿Borrar "${descripcion}"?`)) return;
     const listaT = splitBloques(turnos[`${fecha}_padre`] || '');
     const listaA = splitBloques(turnos[`${fecha}_padre_actividad`] || '');
@@ -706,6 +834,75 @@ const CoParentingApp = () => {
       }
     }
   };
+
+  // ---- Copiar un turno o una actividad a otros días (botón copiar del recuadro de detalle) ----
+  // Al pulsar copiar, el calendario se pone en gris y se van marcando los días donde copiarlo
+  const empezarCopia = (que, valor, descripcion) => {
+    setCopiaEvento({ que, valor, descripcion });
+    setDiasCopia({});
+    setDiaDetalle(null);
+  };
+
+  const cancelarCopia = () => {
+    setCopiaEvento(null);
+    setDiasCopia({});
+  };
+
+  // Copiar a los días marcados. Se guarda al momento, porque en Mes y Año no hay botón de guardar
+  const confirmarCopia = async () => {
+    if (!copiaEvento) return;
+    const dias = Object.keys(diasCopia).sort();
+    if (dias.length === 0) { cancelarCopia(); return; }
+    // Al copiar, cada día recibe el evento como un evento suelto de ese día
+    let valorCopia = copiaEvento.valor;
+    if (copiaEvento.que === 'actividad') {
+      const p = parseActividadPadre(valorCopia);
+      valorCopia = buildActividadPadre(p.tipo, p.entrada, p.salida, p.textoOtro);
+    }
+    const valores = {};
+    dias.forEach(f => {
+      const listaT = splitBloques(turnos[`${f}_padre`] || '');
+      const listaA = splitBloques(turnos[`${f}_padre_actividad`] || '');
+      const largo = Math.max(listaT.length, listaA.length);
+      while (listaT.length < largo) listaT.push('');
+      while (listaA.length < largo) listaA.push('');
+      const lista = copiaEvento.que === 'turno' ? listaT : listaA;
+      // Se coloca en el primer hueco libre del día; si no hay, en un bloque nuevo
+      let idx = lista.findIndex(x => !x);
+      if (idx === -1) { listaT.push(''); listaA.push(''); idx = lista.length - 1; }
+      lista[idx] = valorCopia;
+      const unir = (l) => {
+        while (l.length > 0 && !(l[l.length - 1] || '').split('|').some(c => c)) l.pop();
+        return l.some(b => (b || '').split('|').some(c => c)) ? l.join(SEP_BLOQUES) : '';
+      };
+      valores[f] = { padre: unir(listaT), actividad: unir(listaA) };
+    });
+    setTurnos(prev => {
+      const n = { ...prev };
+      dias.forEach(f => { n[`${f}_padre`] = valores[f].padre; n[`${f}_padre_actividad`] = valores[f].actividad; });
+      return n;
+    });
+    cancelarCopia();
+    if (currentUser === 'parent1') {
+      let todoOk = true;
+      for (const f of dias) {
+        const ok = await saveTurnoDia(f, valores[f]);
+        if (!ok) todoOk = false;
+      }
+      if (todoOk) {
+        setLastSaveStatus('success');
+        setTimeout(() => setLastSaveStatus(null), 2000);
+      } else {
+        setLastSaveStatus('error');
+        alert('No se ha podido copiar en todos los días. Pulsa Recargar e inténtalo de nuevo.');
+      }
+    }
+  };
+
+  // Si se cambia de vista, se sale del modo copiar
+  useEffect(() => {
+    if (currentView !== 'month' && currentView !== 'year') { setCopiaEvento(null); setDiasCopia({}); }
+  }, [currentView]);
 
   // Guardar todos los cambios pendientes (turnos, actividades y custodia)
   const guardarPendientes = async () => {
@@ -773,14 +970,28 @@ const CoParentingApp = () => {
     const actividadActual = splitBloques(cadenaCompleta)[bloqueIdx] || '';
     const parsed = parseActividadPadre(actividadActual);
     const [textoLocal, setTextoLocal] = useState('');
-    
+    const infoRango = parseRango(parsed.rango);
+    const [entradaLocal, setEntradaLocal] = useState(parsed.entrada || '');
+    const [salidaLocal, setSalidaLocal] = useState(parsed.salida || '');
+    const [variosDiasLocal, setVariosDiasLocal] = useState(!!infoRango);
+    const [hastaLocal, setHastaLocal] = useState(infoRango ? infoRango.fin : '');
+
     // Inicializar texto local cuando cambia la fecha, el bloque o se carga de Supabase
     useEffect(() => {
       setTextoLocal(parsed.textoOtro || '');
+      setEntradaLocal(parsed.entrada || '');
+      setSalidaLocal(parsed.salida || '');
+      setVariosDiasLocal(!!infoRango);
+      setHastaLocal(infoRango ? infoRango.fin : '');
     }, [fecha, bloqueIdx, actividadActual]);
-    
+
     // Guardar el bloque completo (turno/actividad) dentro de la cadena del día
     const guardarBloque = (nuevoBloque) => {
+      // Si el evento es (o pasa a ser, o deja de ser) de varios días, se actualizan todos sus días
+      if (parsed.rango || parseActividadPadre(nuevoBloque).rango) {
+        aplicarEventoMultidia(fecha, bloqueIdx, parsed.rango, nuevoBloque);
+        return;
+      }
       const nuevaCadena = setBloqueEnCadena(turnos[`${fecha}_padre_actividad`] || '', bloqueIdx, nuevoBloque);
       setTurnos(prev => ({ ...prev, [`${fecha}_padre_actividad`]: nuevaCadena }));
       // No se guarda al momento: queda pendiente hasta pulsar "Guardar y recargar"
@@ -795,7 +1006,7 @@ const CoParentingApp = () => {
       if (!parsed.tipo) return;
       const textoLimpio = limpiarTextoActividad(textoLocal);
       if (textoLimpio === parsed.textoOtro) return;
-      guardarBloque(buildActividadPadre(parsed.tipo, parsed.entrada, parsed.salida, textoLimpio));
+      guardarBloque(buildActividadPadre(parsed.tipo, parsed.entrada, parsed.salida, textoLimpio, parsed.rango));
     };
 
     const updateActividad = (field, value) => {
@@ -805,9 +1016,44 @@ const CoParentingApp = () => {
         field === 'tipo' ? value : parsed.tipo,
         field === 'entrada' ? value : parsed.entrada,
         field === 'salida' ? value : parsed.salida,
-        textoParaGuardar
+        textoParaGuardar,
+        parsed.rango
       );
       guardarBloque(newActividad);
+    };
+
+    // Las horas se guardan al terminar de elegirlas (al salir del recuadro de la hora)
+    const guardarHora = (field, valor) => {
+      if ((parsed[field] || '') === (valor || '')) return;
+      updateActividad(field, valor || '');
+    };
+
+    // Activar / desactivar "Varios días"
+    const cambiarVariosDias = (activar) => {
+      if (activar) { setVariosDiasLocal(true); return; }
+      if (!parsed.rango) { setVariosDiasLocal(false); setHastaLocal(''); return; }
+      if (!window.confirm('¿Quitar este evento de los demás días y dejarlo solo en este?')) return;
+      guardarBloque(buildActividadPadre(parsed.tipo, parsed.entrada, parsed.salida, limpiarTextoActividad(textoLocal), ''));
+    };
+
+    // Guardar la fecha "hasta" del evento de varios días
+    const guardarHasta = () => {
+      const inicio = infoRango ? infoRango.inicio : fecha;
+      const finActual = infoRango ? infoRango.fin : '';
+      if (!hastaLocal || hastaLocal === finActual) return;
+      if (hastaLocal < fecha) {
+        alert('El último día no puede ser anterior a este día.');
+        setHastaLocal(finActual);
+        return;
+      }
+      if (fechasEntre(inicio, hastaLocal).length > 120) {
+        alert('El evento no puede durar más de 120 días. Revisa la fecha.');
+        setHastaLocal(finActual);
+        return;
+      }
+      // Si se deja en un solo día, deja de ser un evento de varios días
+      const nuevoRango = hastaLocal === inicio ? '' : `${inicio}~${hastaLocal}~${infoRango ? infoRango.id : Date.now().toString(36)}`;
+      guardarBloque(buildActividadPadre(parsed.tipo, parsed.entrada, parsed.salida, limpiarTextoActividad(textoLocal), nuevoRango));
     };
 
     const selectStyle = "w-full text-[9px] p-0.5 border rounded";
@@ -819,13 +1065,39 @@ const CoParentingApp = () => {
           <select value={parsed.tipo || ''} onChange={e => updateActividad('tipo', e.target.value)} className={selectStyle}>
             {tiposActividadPadre.map(t => <option key={t || 'empty'} value={t}>{t || '-'}</option>)}
           </select>
-          <select value={parsed.entrada || ''} onChange={e => updateActividad('entrada', e.target.value)} className={selectStyle}>
-            {horasEntradaPadre.map(h => <option key={h || 'e'} value={h}>{h || '-'}</option>)}
-          </select>
-          <select value={parsed.salida || ''} onChange={e => updateActividad('salida', e.target.value)} className={selectStyle}>
-            {horasSalidaPadre.map(h => <option key={h || 's'} value={h}>{h || '-'}</option>)}
-          </select>
+          {/* Horas con selector de reloj: permite elegir cualquier minuto (07:05, 13:47...) */}
+          <input type="time" value={entradaLocal} title="Hora de inicio"
+            onChange={e => setEntradaLocal(e.target.value)}
+            onBlur={() => guardarHora('entrada', entradaLocal)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } }}
+            className={selectStyle} />
+          <input type="time" value={salidaLocal} title="Hora de fin"
+            onChange={e => setSalidaLocal(e.target.value)}
+            onBlur={() => guardarHora('salida', salidaLocal)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } }}
+            className={selectStyle} />
         </div>
+        {/* Evento de VARIOS días (p. ej. un viaje): se marca la casilla y se elige el último día */}
+        {parsed.tipo && (
+          <div className="flex items-center gap-1 text-[9px]">
+            <label className="flex items-center gap-0.5 font-bold shrink-0" style={{ color: colors.parent1 }}>
+              <input type="checkbox" checked={variosDiasLocal} onChange={e => cambiarVariosDias(e.target.checked)} />
+              Varios días
+            </label>
+            {variosDiasLocal && (
+              <>
+                <span className="shrink-0 text-gray-600">
+                  {infoRango ? `del ${fechaCorta(infoRango.inicio)} al` : 'hasta el'}
+                </span>
+                <input type="date" value={hastaLocal} min={fecha}
+                  onChange={e => setHastaLocal(e.target.value)}
+                  onBlur={guardarHasta}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } }}
+                  className="flex-1 min-w-0 text-[9px] p-0.5 border rounded" />
+              </>
+            )}
+          </div>
+        )}
         {/* Campo de texto libre: aparece con CUALQUIER actividad seleccionada */}
         {parsed.tipo && (
           <input 
@@ -1570,15 +1842,20 @@ const CoParentingApp = () => {
       
       const turnoKey = getTurnoKey(date);
       const turnosDia = getTurnosParaCalendario(turnoKey);
-      const actividadesDia = getActividadesParaCalendario(turnoKey);
-      
+      // Los eventos de varios días no van dentro del día: se pintan como un recuadro que ocupa todos sus días
+      const actividadesDia = getActividadesParaCalendario(turnoKey).filter(a => !a.infoRango);
+      // Modo copiar: el calendario se ve en gris y los días marcados con su color y un borde azul
+      const marcadoCopia = !!copiaEvento && !!diasCopia[dateKey];
+
       return (
-        <div key={dateKey} 
+        <div key={dateKey}
           className="rounded flex flex-col overflow-hidden cursor-pointer"
           onClick={() => handleClickDia(date)}
-          style={{ 
-            border: today ? '2px solid black' : '1px solid #e5e7eb',
-            minHeight: 55
+          style={{
+            border: marcadoCopia ? '3px solid #2563eb' : (today ? '2px solid black' : '1px solid #e5e7eb'),
+            minHeight: 55,
+            filter: copiaEvento && !marcadoCopia ? 'grayscale(1)' : undefined,
+            opacity: copiaEvento && !marcadoCopia ? 0.45 : undefined
           }}>
           {/* Número del día */}
           <div className="text-[9px] text-center font-bold bg-white"
@@ -1618,6 +1895,55 @@ const CoParentingApp = () => {
               </div>
             )}
           </div>
+        </div>
+      );
+    };
+
+    // Recuadros de los eventos de VARIOS días de una semana (un único recuadro que ocupa todos sus días)
+    const renderEventosVariosDias = (week) => {
+      const eventos = {};
+      week.forEach((date, col) => {
+        getActividadesParaCalendario(getTurnoKey(date))
+          .filter(a => a.infoRango)
+          .forEach(a => {
+            if (!eventos[a.rango]) eventos[a.rango] = { ...a, columnas: [] };
+            eventos[a.rango].columnas.push(col);
+          });
+      });
+      const lista = Object.values(eventos).sort((x, y) => x.infoRango.inicio.localeCompare(y.infoRango.inicio));
+      if (lista.length === 0) return null;
+      return (
+        <div className="absolute left-0 right-0 bottom-[2px] grid grid-cols-7 gap-x-0.5 gap-y-[1px] pointer-events-none"
+          style={{ filter: copiaEvento ? 'grayscale(1)' : undefined, opacity: copiaEvento ? 0.45 : undefined }}>
+          {lista.map((ev, fila) => {
+            const desde = Math.min(...ev.columnas);
+            const hasta = Math.max(...ev.columnas);
+            const empiezaAqui = formatDate(week[desde]) === ev.infoRango.inicio;
+            const terminaAqui = formatDate(week[hasta]) === ev.infoRango.fin;
+            return (
+              <div key={ev.rango}
+                className="flex items-center gap-0.5 text-[7px] font-bold leading-tight px-[3px] overflow-hidden whitespace-nowrap"
+                style={{
+                  gridColumn: `${desde + 1} / ${hasta + 2}`,
+                  gridRow: fila + 1,
+                  color: ev.color,
+                  backgroundColor: ev.fondo || 'rgba(255,255,255,0.92)',
+                  border: `1px solid ${ev.fondo || ev.color}`,
+                  borderTopLeftRadius: empiezaAqui ? 4 : 0,
+                  borderBottomLeftRadius: empiezaAqui ? 4 : 0,
+                  borderTopRightRadius: terminaAqui ? 4 : 0,
+                  borderBottomRightRadius: terminaAqui ? 4 : 0,
+                  borderLeftWidth: empiezaAqui ? 1 : 0,
+                  borderRightWidth: terminaAqui ? 1 : 0
+                }}>
+                {!empiezaAqui && <span>◀</span>}
+                {empiezaAqui && ev.entrada && <span className="font-normal">{ev.entrada}</span>}
+                <span className="truncate flex-1">{ev.textoVisible}</span>
+                {terminaAqui && ev.salida && <span className="font-normal">{ev.salida}</span>}
+                {!terminaAqui && <span>▶</span>}
+              </div>
+            );
+          })}
         </div>
       );
     };
@@ -1676,7 +2002,7 @@ const CoParentingApp = () => {
         
         {/* Calendario scrollable continuo - todo el año */}
         {/* Con el recuadro de abajo abierto se deja espacio extra para poder tocar también los últimos días */}
-        <div className="flex-1 overflow-y-auto p-1" style={{ paddingBottom: diaDetalle ? 160 : undefined }}>
+        <div className="flex-1 overflow-y-auto p-1" style={{ paddingBottom: (diaDetalle || copiaEvento) ? 160 : undefined }}>
           {weeks.map((week, weekIdx) => {
             const firstDayOfWeek = week[0];
             const showMonthHeader = firstDayOfWeek.getDate() <= 7;
@@ -1689,8 +2015,11 @@ const CoParentingApp = () => {
                     {capitalize(monthLabel)}
                   </div>
                 )}
-                <div className="grid grid-cols-7 gap-0.5 mb-0.5">
-                  {week.map(date => renderDayParent(date))}
+                <div className="relative mb-0.5">
+                  <div className="grid grid-cols-7 gap-0.5">
+                    {week.map(date => renderDayParent(date))}
+                  </div>
+                  {renderEventosVariosDias(week)}
                 </div>
               </div>
             );
@@ -2909,7 +3238,7 @@ const CoParentingApp = () => {
         </div>
         
         {/* Grid de 12 meses (4 filas x 3 columnas) */}
-        <div className="flex-1 overflow-y-auto" style={{ paddingBottom: diaDetalle ? 160 : undefined }}>
+        <div className="flex-1 overflow-y-auto" style={{ paddingBottom: (diaDetalle || copiaEvento) ? 160 : undefined }}>
           <div className="grid grid-cols-3 gap-2">
             {monthNames.map((monthName, monthIdx) => {
               const monthDates = getMonthDatesForYear(monthIdx);
@@ -2958,14 +3287,18 @@ const CoParentingApp = () => {
                       
                       // Determinar si hay turno o actividad para mostrar
                       const hayTurno = turnosDia.length > 0 || actividadesDia.length > 0;
-                      
+                      // Modo copiar: el calendario se ve en gris y los días marcados con su color y un borde azul
+                      const marcadoCopia = !!copiaEvento && !!diasCopia[formatDate(date)];
+
                       return (
-                        <div key={`${monthIdx}-${date.getDate()}`} 
+                        <div key={`${monthIdx}-${date.getDate()}`}
                           className="rounded-sm flex flex-col overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400"
                           onClick={() => handleClickDia(date)}
-                          style={{ 
+                          style={{
                             height: 32,
-                            border: today ? '2px solid black' : '1px solid #e5e7eb'
+                            border: marcadoCopia ? '2px solid #2563eb' : (today ? '2px solid black' : '1px solid #e5e7eb'),
+                            filter: copiaEvento && !marcadoCopia ? 'grayscale(1)' : undefined,
+                            opacity: copiaEvento && !marcadoCopia ? 0.45 : undefined
                           }}>
                           {/* Fila superior: número del día */}
                           <div className="text-[5px] text-center font-bold leading-none bg-white"
@@ -3181,7 +3514,12 @@ const CoParentingApp = () => {
         // Botón papelera (grande para poder pulsarlo bien en el móvil)
         const Papelera = ({ onClick }) => (
           <button onClick={onClick} title="Borrar"
-            className="ml-auto w-7 h-6 flex items-center justify-center border border-red-300 rounded bg-red-50 text-sm leading-none shrink-0">🗑️</button>
+            className="w-7 h-6 flex items-center justify-center border border-red-300 rounded bg-red-50 text-sm leading-none shrink-0">🗑️</button>
+        );
+        // Botón copiar: pone el calendario en gris para marcar los días donde copiarlo
+        const Copiar = ({ onClick }) => (
+          <button onClick={onClick} title="Copiar a otros días"
+            className="ml-auto w-7 h-6 flex items-center justify-center border border-blue-300 rounded bg-blue-50 text-sm leading-none shrink-0">📋</button>
         );
         const listaActividades = getActividadesParaCalendario(fechaKey);
         const nombreDia = daysOfWeek[diaDetalle.getDay() === 0 ? 6 : diaDetalle.getDay() - 1];
@@ -3208,6 +3546,7 @@ const CoParentingApp = () => {
                       <span className="text-[10px] font-bold" style={{ color: colors.parent1 }}>
                         {t.codigo}{t.horario ? ` (${t.horario})` : ''}
                       </span>
+                      <Copiar onClick={() => empezarCopia('turno', splitBloques(turnos[`${fechaKey}_padre`] || '')[t.idx] || '', t.codigo)} />
                       <Papelera onClick={() => borrarDelDia(fechaKey, 'turno', t.idx, t.codigo)} />
                     </div>
                   ))}
@@ -3227,6 +3566,10 @@ const CoParentingApp = () => {
                       {(a.entrada || a.salida) && (
                         <span className="text-[9px] text-gray-500">{a.entrada || '?'} - {a.salida || '?'}</span>
                       )}
+                      {a.infoRango && (
+                        <span className="text-[9px] text-gray-500">📅 {fechaCorta(a.infoRango.inicio)} → {fechaCorta(a.infoRango.fin)}</span>
+                      )}
+                      <Copiar onClick={() => empezarCopia('actividad', a.cadena, a.textoVisible)} />
                       <Papelera onClick={() => borrarDelDia(fechaKey, 'actividad', a.idx,
                         `${a.textoVisible}${(a.entrada || a.salida) ? ` ${a.entrada || '?'}-${a.salida || '?'}` : ''}`)} />
                     </div>
@@ -3237,6 +3580,31 @@ const CoParentingApp = () => {
               {/* Aviso de cómo abrir el día para editarlo */}
               <div className="text-[9px] text-gray-400 text-center mt-1">
                 Vuelve a hacer clic en el mismo día para editarlo
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      {/* Barra del modo copiar (mes y año): se marcan los días en el calendario y se confirma aquí */}
+      {copiaEvento && (currentView === 'month' || currentView === 'year') && (() => {
+        const numDias = Object.keys(diasCopia).length;
+        return (
+          <div className="fixed left-0 right-0 bottom-0 z-40 flex justify-center px-2 pb-2 pointer-events-none">
+            <div className="pointer-events-auto w-full max-w-md bg-white border-2 border-blue-500 rounded-lg shadow-xl p-2">
+              <div className="text-xs font-bold mb-0.5">
+                📋 Copiando: <span style={{ color: colors.parent1 }}>{copiaEvento.descripcion}</span>
+              </div>
+              <div className="text-[10px] text-gray-600 mb-2">
+                Toca en el calendario los días donde quieres copiarlo (vuelve a tocar un día para desmarcarlo).
+                {' '}<b>{numDias} {numDias === 1 ? 'día marcado' : 'días marcados'}</b>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={cancelarCopia}
+                  className="flex-1 py-1.5 text-xs font-bold rounded border bg-gray-100">Cancelar</button>
+                <button onClick={confirmarCopia} disabled={numDias === 0}
+                  className={`flex-1 py-1.5 text-xs font-bold rounded text-white ${numDias === 0 ? 'bg-gray-400' : 'bg-blue-600'}`}>
+                  ✓ Copiar{numDias > 0 ? ` a ${numDias} ${numDias === 1 ? 'día' : 'días'}` : ''}
+                </button>
               </div>
             </div>
           </div>
@@ -3258,5 +3626,4 @@ const CoParentingApp = () => {
 };
 
 export default CoParentingApp;
-
 
