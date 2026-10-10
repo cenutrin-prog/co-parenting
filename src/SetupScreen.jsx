@@ -57,178 +57,73 @@ const SetupScreen = ({ parents, setParents, children, setChildren, setCurrentUse
     </h1>
   );
 
-  // VISTA PARA PADRE (parent1): muestra todo (inputs + todos los botones)
-  // También se muestra si showFullMenu está activo (truco de 3 toques)
-  if (!currentUser || currentUser === 'parent1' || showFullMenu) {
-    return (
-      <div className="p-4 max-w-md mx-auto bg-white min-h-screen flex flex-col justify-center">
-        <Title />
+  // VISTA ÚNICA (parent1): nombres + botón para entrar
+  // Ahora solo existe el perfil de Jose Luis (parent1)
+  return (
+    <div className="p-4 max-w-md mx-auto bg-white min-h-screen flex flex-col justify-center">
+      <Title />
+      
+      <div className="space-y-3">
+        <input
+          type="text"
+          placeholder="Nombre del padre 1"
+          value={parents.parent1}
+          onChange={(e) => handleParentChange("parent1", e.target.value)}
+          className="w-full p-2 border rounded"
+          style={{ backgroundColor: inputColors.parent1 }}
+        />
         
-        <div className="space-y-3">
-          <input
-            type="text"
-            placeholder="Nombre del padre 1"
-            value={parents.parent1}
-            onChange={(e) => handleParentChange("parent1", e.target.value)}
-            className="w-full p-2 border rounded"
-            style={{ backgroundColor: inputColors.parent1 }}
-          />
-          
-          <input
-            type="text"
-            placeholder="Nombre del padre 2"
-            value={parents.parent2}
-            onChange={(e) => handleParentChange("parent2", e.target.value)}
-            className="w-full p-2 border rounded"
-            style={{ backgroundColor: inputColors.parent2 }}
-          />
-          
-          <input
-            type="text"
-            placeholder="Nombre hija 1"
-            value={children.child1}
-            onChange={(e) => handleChildChange("child1", e.target.value)}
-            className="w-full p-2 border rounded"
-            style={{ backgroundColor: inputColors.child1 }}
-          />
-          
-          <input
-            type="text"
-            placeholder="Nombre hija 2"
-            value={children.child2}
-            onChange={(e) => handleChildChange("child2", e.target.value)}
-            className="w-full p-2 border rounded"
-            style={{ backgroundColor: inputColors.child2 }}
-          />
-
-          <input
-            type="text"
-            placeholder="Otro cuidador (opcional)"
-            value={parents.other || ''}
-            onChange={(e) => handleParentChange("other", e.target.value)}
-            className="w-full p-2 border rounded"
-            style={{ backgroundColor: inputColors.other }}
-          />
-        </div>
-
-        <div className="mt-4 flex flex-col gap-2">
-          {parents.parent1 && (
-            <button
-              onClick={() => handleSaveAndContinue('parent1')}
-              className="w-full text-white py-3 rounded-lg font-medium text-lg"
-              style={{ backgroundColor: buttonColors.parent1 }}
-            >
-              Continuar como {parents.parent1}
-            </button>
-          )}
-          
-          {parents.parent2 && (
-            <button
-              onClick={() => handleSaveAndContinue('parent2')}
-              className="w-full text-white py-3 rounded-lg font-medium text-lg"
-              style={{ backgroundColor: buttonColors.parent2 }}
-            >
-              Continuar como {parents.parent2}
-            </button>
-          )}
-          
-          {children.child1 && (
-            <button
-              onClick={() => handleSaveAndContinue('child1')}
-              className="w-full text-white py-3 rounded-lg font-medium text-lg"
-              style={{ backgroundColor: buttonColors.child1 }}
-            >
-              Continuar como {children.child1}
-            </button>
-          )}
-          
-          {children.child2 && (
-            <button
-              onClick={() => handleSaveAndContinue('child2')}
-              className="w-full text-white py-3 rounded-lg font-medium text-lg"
-              style={{ backgroundColor: buttonColors.child2 }}
-            >
-              Continuar como {children.child2}
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // VISTA PARA MADRE (parent2): sin inputs, solo botones madre + hijos
-  if (currentUser === 'parent2') {
-    return (
-      <div className="p-4 max-w-md mx-auto bg-white min-h-screen flex flex-col justify-center">
-        <Title />
+        <input
+          type="text"
+          placeholder="Nombre del padre 2"
+          value={parents.parent2}
+          onChange={(e) => handleParentChange("parent2", e.target.value)}
+          className="w-full p-2 border rounded"
+          style={{ backgroundColor: inputColors.parent2 }}
+        />
         
-        <div className="mt-4 flex flex-col gap-2">
-          {parents.parent2 && (
-            <button
-              onClick={() => handleSaveAndContinue('parent2')}
-              className="w-full text-white py-3 rounded-lg font-medium text-lg"
-              style={{ backgroundColor: buttonColors.parent2 }}
-            >
-              Continuar como {parents.parent2}
-            </button>
-          )}
-          
-          {children.child1 && (
-            <button
-              onClick={() => handleSaveAndContinue('child1')}
-              className="w-full text-white py-3 rounded-lg font-medium text-lg"
-              style={{ backgroundColor: buttonColors.child1 }}
-            >
-              Continuar como {children.child1}
-            </button>
-          )}
-          
-          {children.child2 && (
-            <button
-              onClick={() => handleSaveAndContinue('child2')}
-              className="w-full text-white py-3 rounded-lg font-medium text-lg"
-              style={{ backgroundColor: buttonColors.child2 }}
-            >
-              Continuar como {children.child2}
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // VISTA PARA HIJOS (child1 o child2): sin inputs, solo botones de los dos hijos
-  if (currentUser === 'child1' || currentUser === 'child2') {
-    return (
-      <div className="p-4 max-w-md mx-auto bg-white min-h-screen flex flex-col justify-center">
-        <Title />
+        <input
+          type="text"
+          placeholder="Nombre hija 1"
+          value={children.child1}
+          onChange={(e) => handleChildChange("child1", e.target.value)}
+          className="w-full p-2 border rounded"
+          style={{ backgroundColor: inputColors.child1 }}
+        />
         
-        <div className="mt-4 flex flex-col gap-2">
-          {children.child1 && (
-            <button
-              onClick={() => handleSaveAndContinue('child1')}
-              className="w-full text-white py-3 rounded-lg font-medium text-lg"
-              style={{ backgroundColor: buttonColors.child1 }}
-            >
-              Continuar como {children.child1}
-            </button>
-          )}
-          
-          {children.child2 && (
-            <button
-              onClick={() => handleSaveAndContinue('child2')}
-              className="w-full text-white py-3 rounded-lg font-medium text-lg"
-              style={{ backgroundColor: buttonColors.child2 }}
-            >
-              Continuar como {children.child2}
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
+        <input
+          type="text"
+          placeholder="Nombre hija 2"
+          value={children.child2}
+          onChange={(e) => handleChildChange("child2", e.target.value)}
+          className="w-full p-2 border rounded"
+          style={{ backgroundColor: inputColors.child2 }}
+        />
 
-  return null;
+        <input
+          type="text"
+          placeholder="Otro cuidador (opcional)"
+          value={parents.other || ''}
+          onChange={(e) => handleParentChange("other", e.target.value)}
+          className="w-full p-2 border rounded"
+          style={{ backgroundColor: inputColors.other }}
+        />
+      </div>
+
+      <div className="mt-4 flex flex-col gap-2">
+        {parents.parent1 && (
+          <button
+            onClick={() => handleSaveAndContinue('parent1')}
+            className="w-full text-white py-3 rounded-lg font-medium text-lg"
+            style={{ backgroundColor: buttonColors.parent1 }}
+          >
+            Continuar como {parents.parent1}
+          </button>
+        )}
+        
+      </div>
+    </div>
+  );
 };
 
 export default SetupScreen;
