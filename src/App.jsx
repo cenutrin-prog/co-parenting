@@ -3531,20 +3531,8 @@ const CoParentingApp = () => {
                 Global
               </button>
             </div>
-            {/* Segunda fila: vistas por persona */}
+            {/* Segunda fila: estadísticas (botones de Irene, Denia y Elsa eliminados) */}
             <div className="flex gap-1">
-              <button onClick={() => setCurrentView('motherMonth')} className={`px-2 py-1 text-xs rounded ${currentView === 'motherMonth' ? 'text-white' : 'bg-gray-100'}`}
-                style={{ backgroundColor: currentView === 'motherMonth' ? colors.parent2 : undefined, color: '#065f46', fontWeight: 'bold' }}>
-                {parents.parent2 || 'Madre'}
-              </button>
-              <button onClick={() => setCurrentView('child1month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child1month' ? 'text-white' : 'bg-gray-100'}`}
-                style={{ backgroundColor: currentView === 'child1month' ? colors.child1 : undefined, color: currentView === 'child1month' ? '#000' : undefined }}>
-                {children.child1 || 'Hijo 1'}
-              </button>
-              <button onClick={() => setCurrentView('child2month')} className={`px-2 py-1 text-xs rounded ${currentView === 'child2month' ? 'text-white' : 'bg-gray-100'}`}
-                style={{ backgroundColor: currentView === 'child2month' ? colors.child2 : undefined, color: currentView === 'child2month' ? '#000' : undefined }}>
-                {children.child2 || 'Hijo 2'}
-              </button>
               <button onClick={() => setCurrentView('stats')} className={`px-1.5 py-1 text-xs rounded ${currentView === 'stats' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
                 <BarChart3 size={14} />
               </button>
@@ -3713,5 +3701,4 @@ const CoParentingApp = () => {
 };
 
 export default CoParentingApp;
-
 
