@@ -3,6 +3,10 @@ import { Calendar, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import SetupScreen from './SetupScreen';
 import { supabase } from './supabaseClient.js';
 
+// ===== CLAVE DE ACCESO =====
+// Solo quien conozca esta clave puede usar la app. Cámbiala por la tuya (puede llevar números o letras).
+const PIN_ACCESO = '0617';
+
 const CoParentingApp = () => {
   const savedParents = typeof window !== 'undefined' ? localStorage.getItem('coparenting_parents') : null;
   const savedChildren = typeof window !== 'undefined' ? localStorage.getItem('coparenting_children') : null;
@@ -11,6 +15,10 @@ const CoParentingApp = () => {
   const [children, setChildren] = useState(savedChildren ? JSON.parse(savedChildren) : { child1: '', child2: '' });
   const [step, setStep] = useState(savedParents && savedChildren && savedUser ? 'main' : 'setup');
   const [currentUser, setCurrentUser] = useState(savedUser || null);
+  // Bloqueo: cada móvil tiene que meter la clave una vez; si no, la app no muestra nada
+  const [desbloqueado, setDesbloqueado] = useState(typeof window !== 'undefined' && localStorage.getItem('coparenting_pin_ok') === '1');
+  const [pinEscrito, setPinEscrito] = useState('');
+  const [pinError, setPinError] = useState(false);
   const colors = { parent1: '#FF6B35', parent2: '#86efac', child1: '#FDD835', child2: '#00BCD4', other: '#FF69B4' };
   const borderColors = { parent1: '#CC4400', parent2: '#065f46', child1: '#C6A700', child2: '#00838F', other: '#C2185B' };
   const [schedule, setSchedule] = useState({});
@@ -808,8 +816,8 @@ const CoParentingApp = () => {
   }, [parents, children, currentUser]);
 
   useEffect(() => {
-    if (step === 'main' && parents.parent1 && children.child1) loadScheduleFromSupabase();
-  }, [step, parents.parent1, children.child1, loadScheduleFromSupabase]);
+    if (desbloqueado && step === 'main' && parents.parent1 && children.child1) loadScheduleFromSupabase();
+  }, [desbloqueado, step, parents.parent1, children.child1, loadScheduleFromSupabase]);
 
   // Guardar en Supabase TODO lo de un día (turno, actividad y turno madre) de una sola vez,
   // tomando los valores que hay ahora mismo en pantalla
@@ -2628,6 +2636,42 @@ const CoParentingApp = () => {
   };
 
   const handleProfileClick = () => { if (currentUser === 'parent1' || currentUser === 'parent2') setStep('setup'); };
+
+  // Pantalla de bloqueo: si este móvil no ha metido la clave, no se ve nada de la app
+  if (!desbloqueado) {
+    const comprobarPin = () => {
+      if (pinEscrito.trim() === PIN_ACCESO) {
+        localStorage.setItem('coparenting_pin_ok', '1');
+        localStorage.setItem('coparenting_currentUser', 'parent1');
+        setCurrentUser('parent1');
+        setDesbloqueado(true);
+        setPinEscrito('');
+        setPinError(false);
+      } else {
+        setPinError(true);
+        setPinEscrito('');
+      }
+    };
+    return (
+      <div className="p-4 max-w-md mx-auto bg-white min-h-screen flex flex-col justify-center items-center">
+        <div className="text-5xl mb-4">🔒</div>
+        <h1 className="text-xl font-bold text-center mb-2 text-gray-700">App no disponible</h1>
+        <p className="text-sm text-center text-gray-500 mb-6">Esta aplicación ya no está en uso.</p>
+        <input
+          type="password"
+          value={pinEscrito}
+          onChange={(e) => { setPinEscrito(e.target.value); setPinError(false); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') comprobarPin(); }}
+          placeholder="Clave"
+          className="w-48 p-2 border rounded text-center text-lg"
+        />
+        {pinError && <p className="text-sm text-red-600 mt-2">Clave incorrecta</p>}
+        <button onClick={comprobarPin} className="mt-4 w-48 text-white py-2 rounded-lg font-medium" style={{ backgroundColor: '#9ca3af' }}>
+          Entrar
+        </button>
+      </div>
+    );
+  }
 
   if (step === 'setup') {
     return <SetupScreen parents={parents} setParents={setParents} children={children} setChildren={setChildren}
