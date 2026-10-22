@@ -3612,7 +3612,7 @@ const CoParentingApp = () => {
           <button onClick={onClick} title="Copiar a otros días"
             className="ml-auto w-7 h-6 flex items-center justify-center border border-blue-300 rounded bg-blue-50 text-sm leading-none shrink-0">📋</button>
         );
-        const listaActividades = getActividadesParaCalendario(fechaKey);
+        const listaActividades = ordenarActividadesDia(getActividadesParaCalendario(fechaKey));
         const nombreDia = daysOfWeek[diaDetalle.getDay() === 0 ? 6 : diaDetalle.getDay() - 1];
         const esRojo = isRedDay(diaDetalle);
         return (
