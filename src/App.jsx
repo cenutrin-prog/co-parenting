@@ -537,6 +537,7 @@ const CoParentingApp = () => {
           : (texto || getEtiquetaActividad(a.tipo));
         return {
           idx: a.idx,
+          tipo: a.tipo,
           textoVisible,
           color: estilo.color,
           fondo: estilo.fondo,
@@ -547,6 +548,21 @@ const CoParentingApp = () => {
           cadena: getActividadesPadreDia(fecha)[a.idx] || ''
         };
       });
+
+  // Orden de las actividades dentro del recuadro del día (vistas Mes y Año):
+  // 1º las F.O., 2º las que no tienen hora y después el resto, de la hora más temprana a la más tardía
+  const ordenarActividadesDia = (lista) => {
+    const grupo = (a) => (a.tipo === 'F.O.' ? 0 : (a.entrada ? 2 : 1));
+    return [...lista].sort((x, y) => {
+      const gx = grupo(x);
+      const gy = grupo(y);
+      if (gx !== gy) return gx - gy;
+      if (!x.entrada && !y.entrada) return 0;
+      if (!x.entrada) return -1;
+      if (!y.entrada) return 1;
+      return x.entrada.localeCompare(y.entrada);
+    });
+  };
 
   // Lista de turnos de trabajo de un día, ya preparados para pintar
   const getTurnosParaCalendario = (fecha) =>
@@ -1926,7 +1942,7 @@ const CoParentingApp = () => {
       const turnoKey = getTurnoKey(date);
       const turnosDia = getTurnosParaCalendario(turnoKey);
       // Los eventos de varios días no van dentro del día: se pintan como un recuadro que ocupa todos sus días
-      const actividadesDia = getActividadesParaCalendario(turnoKey).filter(a => !a.infoRango);
+      const actividadesDia = ordenarActividadesDia(getActividadesParaCalendario(turnoKey).filter(a => !a.infoRango));
       // Modo copiar: el calendario se ve en gris y los días marcados con su color y un borde azul
       const marcadoCopia = !!copiaEvento && !!diasCopia[dateKey];
 
@@ -3362,7 +3378,7 @@ const CoParentingApp = () => {
                       const turnoKey = getTurnoKey(date);
                       const turnosDia = getTurnosParaCalendario(turnoKey);
                       // Los eventos de varios días no van dentro del día: se pintan como un recuadro que ocupa todos sus días
-                      const actividadesDia = getActividadesParaCalendario(turnoKey).filter(a => !a.infoRango);
+                      const actividadesDia = ordenarActividadesDia(getActividadesParaCalendario(turnoKey).filter(a => !a.infoRango));
                       
                       const today = isToday(date);
                       const redDay = isRedDay(date);
